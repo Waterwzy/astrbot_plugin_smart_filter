@@ -1,5 +1,4 @@
 import asyncio
-import copy
 import datetime
 import json
 import time
@@ -23,17 +22,15 @@ class MyPlugin(Star):
         self._sf_lock = asyncio.Lock()
 
     async def initialize(self):
+        """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
         async with self._sf_lock:
             self.ban_list = self.get_ban_list()
             await self.handle_update()
-        """可选择实现异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
 
     async def handle_update(self):
-        copy_list = copy.deepcopy(self.ban_list)
-        for key in copy_list["available_platforms"]:
+        for key in list(self.ban_list["available_platforms"]):
             if key not in self.config["available_platforms"]:
                 self.ban_list["prohibits"].pop(key, None)
-        for key in copy_list["available_platforms"]:
             if key not in self.config["available_platforms"]:
                 self.ban_list["banners"].pop(key, None)
         for key in self.config["available_platforms"]:
@@ -233,6 +230,7 @@ class MyPlugin(Star):
             for key, item in list(item_plat.items()):
                 if item <= time.time():
                     self.ban_list["banners"][key_p].pop(key)
+                    self.ban_list["prohibits"][key_p].pop(key, None)
 
     @filter.command("sf_checkban")
     async def sf_checkban(self, event: AstrMessageEvent, plat_name: str | None = None):
@@ -378,7 +376,7 @@ class MyPlugin(Star):
             ):
                 if time.time() >= self.ban_list["banners"][sender_plat][sender_id]:
                     self.ban_list["banners"][sender_plat].pop(sender_id)
-                    self.ban_list["prohibits"][sender_plat].pop(sender_id,None)
+                    self.ban_list["prohibits"][sender_plat].pop(sender_id, None)
                 else:
                     times = self.ban_list["banners"][sender_plat][sender_id]
                     except_time = datetime.datetime.fromtimestamp(times)
