@@ -1,17 +1,16 @@
-from astrbot.api.event import filter, AstrMessageEvent, MessageEventResult, MessageChain
-import astrbot.api.message_components as Comp
-from astrbot.api.star import Context, Star, register, StarTools
-from astrbot.api import logger, AstrBotConfig
-from astrbot.api.provider import ProviderRequest, LLMResponse
-from pathlib import Path
-import json
-import re
-import datetime
-import time
-import pendulum
-import traceback
-import copy
 import asyncio
+import copy
+import datetime
+import json
+import time
+import traceback
+
+import pendulum
+
+from astrbot.api import AstrBotConfig, logger
+from astrbot.api.event import AstrMessageEvent, MessageChain, filter
+from astrbot.api.provider import ProviderRequest
+from astrbot.api.star import Context, Star, StarTools
 
 
 class MyPlugin(Star):
@@ -32,15 +31,15 @@ class MyPlugin(Star):
     async def handle_update(self):
         copy_list = copy.deepcopy(self.ban_list)
         for key in copy_list["available_platforms"]:
-            if not key in self.config["available_platforms"]:
+            if key not in self.config["available_platforms"]:
                 self.ban_list["prohibits"].pop(key, None)
         for key in copy_list["available_platforms"]:
-            if not key in self.config["available_platforms"]:
+            if key not in self.config["available_platforms"]:
                 self.ban_list["banners"].pop(key, None)
         for key in self.config["available_platforms"]:
-            if not key in self.ban_list["prohibits"]:
+            if key not in self.ban_list["prohibits"]:
                 self.ban_list["prohibits"][key] = {}
-            if not key in self.ban_list["banners"]:
+            if key not in self.ban_list["banners"]:
                 self.ban_list["banners"][key] = {}
         self.ban_list["available_platforms"] = self.config["available_platforms"]
         self.write_ban(self.ban_list)
@@ -73,25 +72,25 @@ class MyPlugin(Star):
     ):
         """按照id封禁某位用户一段时间"""
         async with self._sf_lock:
-            if plat_name == None:
+            if plat_name is None:
                 plat_name = event.platform_meta.name
 
-            if not plat_name in self.ban_list["available_platforms"]:
+            if plat_name not in self.ban_list["available_platforms"]:
                 chain = MessageChain().message(
                     f"消息平台{plat_name}不存在。目前可用的消息平台{self.ban_list['available_platforms']}，详情请联系管理员"
                 )
                 await event.send(chain)
                 return
             config = self.context.get_config(umo=event.unified_msg_origin)
-            if not event.get_sender_id() in config["admins_id"]:
-                chain = MessageChain().message(f"您不是管理员，无权使用该命令")
+            if event.get_sender_id() not in config["admins_id"]:
+                chain = MessageChain().message("您不是管理员，无权使用该命令")
                 await event.send(chain)
                 return
             try:
                 ban_time = pendulum.parse(times)
             except pendulum.parsing.exceptions.ParserError:
                 chain = MessageChain().message(
-                    f"这不是一个符合ISO8601规范的时间持续时间，请在核实后重试"
+                    "这不是一个符合ISO8601规范的时间持续时间，请在核实后重试"
                 )
                 await event.send(chain)
                 return
@@ -102,9 +101,9 @@ class MyPlugin(Star):
                 )
             else:
                 chain = MessageChain().message(f"{detail}")
-            await event.send(chain)
 
             self.write_ban(self.ban_list)
+        await event.send(chain)
 
     @filter.command("sf_unban")
     async def sf_unban(
@@ -115,11 +114,11 @@ class MyPlugin(Star):
             config = self.context.get_config(event.unified_msg_origin)
 
             if event.get_sender_id() not in config["admins_id"]:
-                chain = MessageChain().message(f"你不是管理员，无法使用该命令")
+                chain = MessageChain().message("你不是管理员，无法使用该命令")
                 await event.send(chain)
                 return
 
-            if plat_name == None:
+            if plat_name is None:
                 plat_name = event.platform_meta.name
             if plat_name not in self.ban_list["available_platforms"]:
                 chain = MessageChain().message(
@@ -128,7 +127,8 @@ class MyPlugin(Star):
                 await event.send(chain)
                 return
             if user_id not in self.ban_list["banners"][plat_name]:
-                chain = MessageChain().message(f"该用户不在封禁列表中，请核实后重试")
+                chain = MessageChain().message("该用户不在封禁列表中，请核实后重试")
+                await event.send(chain)
                 return
 
             self.ban_list["banners"][plat_name].pop(user_id)
@@ -136,8 +136,8 @@ class MyPlugin(Star):
                 self.ban_list["prohibits"][plat_name].pop(user_id)
             self.write_ban(self.ban_list)
 
-            chain = MessageChain().message(f"解封操作成功！")
-            await event.send(chain)
+            chain = MessageChain().message("解封操作成功！")
+        await event.send(chain)
 
     @filter.command("sf_bancount")
     async def sf_bancount(
@@ -152,7 +152,7 @@ class MyPlugin(Star):
             config = self.context.get_config(event.unified_msg_origin)
 
             if event.get_sender_id() not in config["admins_id"]:
-                chain = MessageChain().message(f"你不是管理员，无法使用该命令")
+                chain = MessageChain().message("你不是管理员，无法使用该命令")
                 await event.send(chain)
                 return
 
@@ -170,7 +170,7 @@ class MyPlugin(Star):
                 ban_time = pendulum.parse(times)
             except pendulum.parsing.exceptions.ParserError:
                 chain = MessageChain().message(
-                    f"这不是一个符合ISO8601规范的时间持续时间，请在核实后重试"
+                    "这不是一个符合ISO8601规范的时间持续时间，请在核实后重试"
                 )
                 await event.send(chain)
                 return
@@ -180,7 +180,7 @@ class MyPlugin(Star):
             else:
                 plat_name = self.ban_list["available_platforms"]
 
-            res_str = f"封禁结果返回：\n"
+            res_str = "封禁结果返回：\n"
             for plat in plat_name:
                 res_str += f"平台{plat}:\n"
                 for key, user in self.ban_list["prohibits"][plat].items():
@@ -193,7 +193,7 @@ class MyPlugin(Star):
                             res_str += f"{detail}\n"
             self.write_ban(self.ban_list)
             chain = MessageChain().message(res_str)
-            await event.send(chain)
+        await event.send(chain)
 
     @filter.command("sf_check")
     async def sf_check(self, event: AstrMessageEvent, plat_name: str | None = None):
@@ -201,32 +201,32 @@ class MyPlugin(Star):
         async with self._sf_lock:
             config = self.context.get_config(umo=event.unified_msg_origin)
 
-            if plat_name == None:
+            if plat_name is None:
                 plat_name = self.config["available_platforms"]
-            elif not plat_name in self.config["available_platforms"]:
-                chain = MessageChain().message(f"您提供的平台不在插件配置范围内")
+            elif plat_name not in self.config["available_platforms"]:
+                chain = MessageChain().message("您提供的平台不在插件配置范围内")
                 await event.send(chain)
                 return
             else:
                 plat_name = [plat_name]
 
-            if not event.get_sender_id() in config["admins_id"]:
+            if event.get_sender_id() not in config["admins_id"]:
                 chain = MessageChain().message(
-                    f"该命令仅管理员有权使用，您不是管理员，无法使用"
+                    "该命令仅管理员有权使用，您不是管理员，无法使用"
                 )
                 await event.send(chain)
                 return
 
-            prohibit_str = f"目前的所有违规历史消息：\n"
+            prohibit_str = "目前的所有违规历史消息：\n"
             for key in plat_name:
                 prohibit_str += f"消息平台{key}:\n"
                 for user, msg_list in self.ban_list["prohibits"][key].items():
                     prohibit_str += f"用户id：{user} 违规消息数:{len(msg_list)}条\n"
                     for words in msg_list:
                         prohibit_str += f"{words}\n"
-                    prohibit_str += f"\n"
+                    prohibit_str += "\n"
             chain = MessageChain().message(prohibit_str)
-            await event.send(chain)
+        await event.send(chain)
 
     async def unban_all(self):
         for key_p, item_plat in list(self.ban_list["banners"].items()):
@@ -242,7 +242,7 @@ class MyPlugin(Star):
 
             if event.get_sender_id() not in config["admins_id"]:
                 chain = MessageChain().message(
-                    f"该命令仅管理员有权使用，您不是管理员，无法使用"
+                    "该命令仅管理员有权使用，您不是管理员，无法使用"
                 )
                 await event.send(chain)
                 return
@@ -265,14 +265,14 @@ class MyPlugin(Star):
             else:
                 plat_name = self.ban_list["available_platforms"]
 
-            ban_str = f"目前封禁中的用户：\n"
+            ban_str = "目前封禁中的用户：\n"
             for key in plat_name:
                 ban_str += f"消息平台：{key}\n"
                 for user, times in self.ban_list["banners"][key].items():
                     except_time = datetime.datetime.fromtimestamp(times)
                     ban_str += f"用户{user},预计解封时间为{except_time.strftime('%Y年%m月%d日 %H:%M:%S')}\n"
             chain = MessageChain().message(ban_str)
-            await event.send(chain)
+        await event.send(chain)
 
     @filter.command("sf_clear")
     async def sf_clear(
@@ -284,7 +284,7 @@ class MyPlugin(Star):
 
             if event.get_sender_id() not in config["admins_id"]:
                 chain = MessageChain().message(
-                    f"该命令仅管理员有权使用，您不是管理员，无法使用"
+                    "该命令仅管理员有权使用，您不是管理员，无法使用"
                 )
                 await event.send(chain)
                 return
@@ -314,7 +314,7 @@ class MyPlugin(Star):
                     return
             send_str = f"未找到用户{user_id}的违规消息，请使用/sf_check来查看当前记录的所有平台的违规消息"
             chain = MessageChain().message(send_str)
-            await event.send(chain)
+        await event.send(chain)
 
     def get_ban_list(self):
         data_dir = StarTools.get_data_dir()
@@ -338,7 +338,7 @@ class MyPlugin(Star):
             return default_banlist
 
         try:
-            with open(file_path, "r", encoding="utf-8") as f:
+            with open(file_path, encoding="utf-8") as f:
                 banlist = json.load(f)
         except Exception as e:
             logger.error(e)
@@ -368,7 +368,7 @@ class MyPlugin(Star):
         sender_id = event.get_sender_id()
         msg_str = event.get_message_str()
         sender_plat = event.platform_meta.name
-        if not sender_plat in self.ban_list["available_platforms"]:
+        if sender_plat not in self.ban_list["available_platforms"]:
             return
 
         async with self._sf_lock:
@@ -378,6 +378,7 @@ class MyPlugin(Star):
             ):
                 if time.time() >= self.ban_list["banners"][sender_plat][sender_id]:
                     self.ban_list["banners"][sender_plat].pop(sender_id)
+                    self.ban_list["prohibits"][sender_plat].pop(sender_id,None)
                 else:
                     times = self.ban_list["banners"][sender_plat][sender_id]
                     except_time = datetime.datetime.fromtimestamp(times)
@@ -387,13 +388,6 @@ class MyPlugin(Star):
                     await event.send(chain)
                     event.stop_event()
                     return
-
-            if (
-                sender_plat in self.ban_list["available_platforms"]
-                and self.ban_list["prohibits"][sender_plat].get(sender_id, None)
-                is not None
-            ):
-                self.ban_list["prohibits"][sender_plat].pop(sender_id)
 
             self.write_ban(self.ban_list)
 
@@ -416,7 +410,7 @@ class MyPlugin(Star):
                 if self.config["filter_block"] not in filter_res.completion_text:
                     return
             filter_resoning_res = filter_res.reasoning_content
-        except Exception as e:
+        except Exception:
             error_msg = traceback.format_exc()
             logger.error(error_msg)
             return
@@ -426,7 +420,7 @@ class MyPlugin(Star):
         async with self._sf_lock:
             if (
                 sender_plat in self.ban_list["available_platforms"]
-                and self.ban_list["prohibits"][sender_plat].get(sender_id, None) == None
+                and self.ban_list["prohibits"][sender_plat].get(sender_id, None) is None
             ):
                 self.ban_list["prohibits"][sender_plat][sender_id] = []
             self.ban_list["prohibits"][sender_plat][sender_id].append(msg_str)
@@ -444,7 +438,7 @@ class MyPlugin(Star):
             speak_res = await self.context.llm_generate(
                 chat_provider_id=self.config["speak_config"], contexts=msg
             )
-        except Exception as e:
+        except Exception:
             error_msg = traceback.format_exc()
             logger.error(error_msg)
             return
