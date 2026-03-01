@@ -16,8 +16,6 @@ class MyPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         super().__init__(context)
         self.config = config
-        self.session = None
-        self.datalist = None
         self.ban_list = None
         self._sf_lock = asyncio.Lock()
 
@@ -78,7 +76,7 @@ class MyPlugin(Star):
                 )
                 await event.send(chain)
                 return
-            config = self.context.get_config(umo=event.unified_msg_origin)
+            config = self.context.get_config(event.unified_msg_origin)
             if event.get_sender_id() not in config["admins_id"]:
                 chain = MessageChain().message("您不是管理员，无权使用该命令")
                 await event.send(chain)
@@ -196,7 +194,7 @@ class MyPlugin(Star):
     async def sf_check(self, event: AstrMessageEvent, plat_name: str | None = None):
         """检查用户发送的违规消息内容"""
         async with self._sf_lock:
-            config = self.context.get_config(umo=event.unified_msg_origin)
+            config = self.context.get_config(event.unified_msg_origin)
 
             if plat_name is None:
                 plat_name = self.config["available_platforms"]
@@ -226,17 +224,20 @@ class MyPlugin(Star):
         await event.send(chain)
 
     async def unban_all(self):
+        flag = False
         for key_p, item_plat in list(self.ban_list["banners"].items()):
             for key, item in list(item_plat.items()):
                 if item <= time.time():
                     self.ban_list["banners"][key_p].pop(key)
                     self.ban_list["prohibits"][key_p].pop(key, None)
+                    flag = True
+        return flag
 
     @filter.command("sf_checkban")
     async def sf_checkban(self, event: AstrMessageEvent, plat_name: str | None = None):
         """查看目前正在封禁的用户"""
         async with self._sf_lock:
-            config = self.context.get_config(umo=event.unified_msg_origin)
+            config = self.context.get_config(event.unified_msg_origin)
 
             if event.get_sender_id() not in config["admins_id"]:
                 chain = MessageChain().message(
@@ -255,8 +256,8 @@ class MyPlugin(Star):
                 await event.send(chain)
                 return
 
-            await self.unban_all()
-            self.write_ban(self.ban_list)
+            if await self.unban_all():
+                self.write_ban(self.ban_list)
 
             if plat_name is not None:
                 plat_name = [plat_name]
@@ -276,7 +277,7 @@ class MyPlugin(Star):
     async def sf_clear(
         self, event: AstrMessageEvent, user_id: str, plat_name: str | None = None
     ):
-        """手动清理特定用户的所有违规记录"""
+        """手动清理特定用户的违规记录（默认清理找到的第一个）"""
         async with self._sf_lock:
             config = self.context.get_config(event.unified_msg_origin)
 
@@ -377,6 +378,7 @@ class MyPlugin(Star):
                 if time.time() >= self.ban_list["banners"][sender_plat][sender_id]:
                     self.ban_list["banners"][sender_plat].pop(sender_id)
                     self.ban_list["prohibits"][sender_plat].pop(sender_id, None)
+                    self.write_ban(self.ban_list)
                 else:
                     times = self.ban_list["banners"][sender_plat][sender_id]
                     except_time = datetime.datetime.fromtimestamp(times)
@@ -386,8 +388,6 @@ class MyPlugin(Star):
                     await event.send(chain)
                     event.stop_event()
                     return
-
-            self.write_ban(self.ban_list)
 
         system_prompt = (
             await self.context.persona_manager.get_persona(self.config["filter_prompt"])
