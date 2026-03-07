@@ -192,7 +192,7 @@ class MyPlugin(Star):
             chain = self.check_user(event.get_sender_id(), config, plat_name)
 
             if chain is None:
-                if await self.unban_all:
+                if await self.unban_all():
                     self.write_ban(self.ban_list)
                 prohibit_str = "目前的所有违规历史消息：\n"
                 for key in plat_name:
@@ -362,7 +362,7 @@ class MyPlugin(Star):
             else:
                 if self.config["filter_block"] not in filter_res.completion_text:
                     return
-            filter_resoning_res = filter_res.reasoning_content
+            filter_reasoning_res = filter_res.reasoning_content
         except Exception:
             error_msg = traceback.format_exc()
             logger.error(error_msg)
@@ -404,7 +404,7 @@ class MyPlugin(Star):
         await event.send(chain)
         if self.config["debug_mode"]:
             chain = MessageChain().message(
-                f"[DEBUG]reasoning content:{filter_resoning_res}"
+                f"[DEBUG]reasoning content:{filter_reasoning_res}"
             )
             await event.send(chain)
         event.stop_event()
