@@ -3,7 +3,7 @@ display_name: 用户输入审核
 desc: 一个可用于角色扮演的过滤器插件 
 version: v1.1.0
 author: Waterwzy 
-repo: https://github.com/Waterwzy/astrbot_plugin_firefly_filter 
+repo: https://github.com/Waterwzy/astrbot_plugin_smart_filter 
 keywords:
   - 角色扮演
   - 输入审核
