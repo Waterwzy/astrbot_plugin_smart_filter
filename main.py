@@ -12,13 +12,20 @@ from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star, StarTools
 
+# pyright: reportAttributeAccessIssue=false
+
+"""
+note：已知问题
+1.配置文件改动master时，如果不及时注册，消息无法及时切换到目标用户处发送。
+"""
+
 
 class MyPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
         """同步初始化行为，主要是为了定义自身的各种属性"""
         super().__init__(context)
         self.config = config
-        self.ban_list = None
+        self.ban_list = {}
         self._sf_lock = asyncio.Lock()
         # 记录上次全量清理过期封禁的时间戳，用于定期触发 unban_all
         self._last_unban_ts: float = 0.0
@@ -29,7 +36,7 @@ class MyPlugin(Star):
         # 后台重试任务
         self._retry_task = None
         # 管理员的 unified_msg_origin，用于主动发送通知
-        self._admin_umo: str = None
+        self._admin_umo: str = ""
 
     async def send_notify_to_admin(self, violation_info: dict) -> bool:
         """立即发送违规通知给管理员
@@ -43,31 +50,29 @@ class MyPlugin(Star):
         try:
             # 检查是否已注册管理员 umo
             if not self._admin_umo:
-                logger.warning("[违规通知] 管理员未注册，请先使用 /sf_register_admin 命令注册")
+                logger.warning(
+                    "[违规通知] 管理员未注册，请先使用 /sf_register_admin 命令注册"
+                )
                 return False
 
             # 构建通知消息（优化格式，添加长度限制）
-            time_str = datetime.datetime.fromtimestamp(violation_info["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
+            time_str = datetime.datetime.fromtimestamp(
+                violation_info["timestamp"]
+            ).strftime("%Y-%m-%d %H:%M:%S")
 
             # 限制消息长度，避免过长
-            msg_content = violation_info['message']
+            msg_content = violation_info["message"]
             if len(msg_content) > 200:
                 msg_content = msg_content[:200] + "..."
 
-            notify_msg = f"【违规消息通知】\n"
-            notify_msg += f"━━━━━━━━━━━━━━━━\n"
+            notify_msg = "【违规消息通知】\n"
+            notify_msg += "━━━━━━━━━━━━━━━━\n"
             notify_msg += f"⏰ 时间：{time_str}\n"
             notify_msg += f"📱 平台：{violation_info['platform']}\n"
             notify_msg += f"👤 用户：{violation_info['user_id']}\n"
             notify_msg += f"💬 消息：{msg_content}\n"
 
-            if violation_info.get('reasoning'):
-                reasoning = violation_info['reasoning']
-                if len(reasoning) > 150:
-                    reasoning = reasoning[:150] + "..."
-                notify_msg += f"🔍 理由：{reasoning}\n"
-
-            notify_msg += f"━━━━━━━━━━━━━━━━\n"
+            notify_msg += "━━━━━━━━━━━━━━━━\n"
             notify_msg += f"💡 使用 /sf_check {violation_info['user_id']} 查看详情"
 
             # 创建消息链
@@ -78,7 +83,7 @@ class MyPlugin(Star):
             # 使用保存的 admin_umo 发送消息
             await self.context.send_message(self._admin_umo, chain)
 
-            logger.info(f"[违规通知] 通知发送成功")
+            logger.info("[违规通知] 通知发送成功")
             return True
 
         except Exception as e:
@@ -94,7 +99,9 @@ class MyPlugin(Star):
 
                 async with self._sf_lock:
                     # 检查 ban_list 是否已初始化
-                    if not self.ban_list or not self.ban_list.get("pending_notifications"):
+                    if not self.ban_list or not self.ban_list.get(
+                        "pending_notifications"
+                    ):
                         continue
 
                     max_retries = self.config.get("notify_max_retries", 3)
@@ -104,11 +111,15 @@ class MyPlugin(Star):
                         retry_count = item.get("retry_count", 0)
 
                         if retry_count >= max_retries:
-                            logger.warning(f"[违规通知] 通知重试次数已达上限，丢弃: {item['user_id']}@{item['platform']}")
+                            logger.warning(
+                                f"[违规通知] 通知重试次数已达上限，丢弃: {item['user_id']}@{item['platform']}"
+                            )
                             continue
 
                         # 尝试重新发送
-                        logger.info(f"[违规通知] 重试发送通知 (第{retry_count + 1}次): {item['user_id']}@{item['platform']}")
+                        logger.info(
+                            f"[违规通知] 重试发送通知 (第{retry_count + 1}次): {item['user_id']}@{item['platform']}"
+                        )
                         success = await self.send_notify_to_admin(item)
 
                         if not success:
@@ -119,7 +130,9 @@ class MyPlugin(Star):
                     self.ban_list["pending_notifications"] = failed_items
                     if failed_items:
                         self.write_ban(self.ban_list)
-                        logger.info(f"[违规通知] 队列中还有 {len(failed_items)} 条待重试通知")
+                        logger.info(
+                            f"[违规通知] 队列中还有 {len(failed_items)} 条待重试通知"
+                        )
 
             except asyncio.CancelledError:
                 logger.info("[违规通知] 重试任务已取消")
@@ -143,14 +156,24 @@ class MyPlugin(Star):
         if self.config.get("enable_notify", False):
             if not self._admin_umo:
                 logger.warning("[违规通知] 违规通知已启用，但管理员尚未注册")
-                logger.warning("[违规通知] 请使用 /sf_register_admin 命令注册管理员以接收通知")
+                logger.warning(
+                    "[违规通知] 请使用 /sf_register_admin 命令注册管理员以接收通知"
+                )
+            elif self.config["notify_master"] == "":
+                logger.warning(
+                    "[违规通知]：违规消息已启用，但是未设置消息接收者，请在配置项中输入接收者ID"
+                )
             else:
-                logger.info(f"[违规通知] 已启用违规通知功能，通知将发送至管理员")
-                logger.info(f"[违规通知] 重试配置：间隔 {self.config.get('notify_retry_interval', 60)}秒，最多重试 {self.config.get('notify_max_retries', 3)}次")
+                logger.info("[违规通知] 已启用违规通知功能，通知将发送至管理员")
+                logger.info(
+                    f"[违规通知] 重试配置：间隔 {self.config.get('notify_retry_interval', 60)}秒，最多重试 {self.config.get('notify_max_retries', 3)}次"
+                )
 
                 # 启动后台重试任务
                 if self._retry_task is None or self._retry_task.done():
-                    self._retry_task = asyncio.create_task(self.retry_failed_notifications())
+                    self._retry_task = asyncio.create_task(
+                        self.retry_failed_notifications()
+                    )
                     logger.info("[违规通知] 已启动通知重试后台任务")
         else:
             logger.info("[违规通知] 违规通知功能未启用")
@@ -258,7 +281,7 @@ class MyPlugin(Star):
 
             if chain is None:
                 ban_time = pendulum.parse(times)
-                state, detail = await self.ban_user(user_id, plat_name, ban_time)
+                state, detail = await self.ban_user(user_id, plat_name, ban_time)  # type:ignore
                 if state == "Success":
                     chain = MessageChain().message(
                         f"用户{user_id}封禁成功，预计解封时间{detail}"
@@ -306,22 +329,22 @@ class MyPlugin(Star):
             config = self.context.get_config(event.unified_msg_origin)
 
             if plat_name is not None:
-                plat_name = [plat_name]
+                plat_list = [plat_name]
             else:
-                plat_name = self.ban_list["available_platforms"]
+                plat_list = self.ban_list["available_platforms"]
 
-            chain = self.check_user(event.get_sender_id(), config, plat_name, times)
+            chain = self.check_user(event.get_sender_id(), config, plat_list, times)
 
             if chain is None:
                 if await self.unban_all():
                     self.write_ban(self.ban_list)
                 ban_time = pendulum.parse(times)
                 res_str = "封禁结果返回：\n"
-                for plat in plat_name:
+                for plat in plat_list:
                     res_str += f"平台{plat}:\n"
                     for key, user in self.ban_list["prohibits"][plat].items():
                         if len(user) >= count:
-                            res, detail = await self.ban_user(key, plat, ban_time)
+                            res, detail = await self.ban_user(key, plat, ban_time)  # type:ignore
                             res_str += f"用户{key}:"
                             if res == "Success":
                                 res_str += f"封禁成功，预计解封时间{detail}\n"
@@ -338,17 +361,17 @@ class MyPlugin(Star):
             config = self.context.get_config(event.unified_msg_origin)
 
             if plat_name is None:
-                plat_name = self.config["available_platforms"]
+                plat_list = self.config["available_platforms"]
             else:
-                plat_name = [plat_name]
+                plat_list = [plat_name]
 
-            chain = self.check_user(event.get_sender_id(), config, plat_name)
+            chain = self.check_user(event.get_sender_id(), config, plat_list)
 
             if chain is None:
                 if await self.unban_all():
                     self.write_ban(self.ban_list)
                 prohibit_str = "目前的所有违规历史消息：\n"
-                for key in plat_name:
+                for key in plat_list:
                     prohibit_str += f"消息平台{key}:\n"
                     for user, msg_list in self.ban_list["prohibits"][key].items():
                         prohibit_str += f"用户id：{user} 违规消息数:{len(msg_list)}条\n"
@@ -375,18 +398,18 @@ class MyPlugin(Star):
             config = self.context.get_config(event.unified_msg_origin)
 
             if plat_name is not None:
-                plat_name = [plat_name]
+                plat_list = [plat_name]
             else:
-                plat_name = self.ban_list["available_platforms"]
+                plat_list = self.ban_list["available_platforms"]
 
-            chain = self.check_user(event.get_sender_id(), config, plat_name)
+            chain = self.check_user(event.get_sender_id(), config, plat_list)
 
             if chain is None:
                 if await self.unban_all():
                     self.write_ban(self.ban_list)
 
                 ban_str = "目前封禁中的用户：\n"
-                for key in plat_name:
+                for key in plat_list:
                     ban_str += f"消息平台：{key}\n"
                     for user, times in self.ban_list["banners"][key].items():
                         except_time = datetime.datetime.fromtimestamp(times)
@@ -403,23 +426,21 @@ class MyPlugin(Star):
             config = self.context.get_config(event.unified_msg_origin)
 
             if plat_name is None:
-                plat_name = self.ban_list["available_platforms"]
+                plat_list = self.ban_list["available_platforms"]
             else:
-                plat_name = [plat_name]
+                plat_list = [plat_name]
 
-            chain = self.check_user(event.get_sender_id(), config, plat_name)
-            flag = 0
+            chain = self.check_user(event.get_sender_id(), config, plat_list)
 
             if chain is None:
-                for plat in plat_name:
+                for plat in plat_list:
                     if user_id in self.ban_list["prohibits"][plat]:
                         send_str = f"用户{user_id}的违规消息{self.ban_list['prohibits'][plat][user_id]}将会被清除"
                         self.ban_list["prohibits"][plat].pop(user_id)
                         chain = MessageChain().message(send_str)
                         self.write_ban(self.ban_list)
-                        flag = 1
                         break
-                if not flag:
+                if not chain:
                     send_str = f"未找到用户{user_id}的违规消息，请使用/sf_check来查看当前记录的所有平台的违规消息"
                     chain = MessageChain().message(send_str)
         await event.send(chain)
@@ -434,27 +455,29 @@ class MyPlugin(Star):
             config = self.context.get_config(event.unified_msg_origin)
             sender_id = event.get_sender_id()
 
-            # 权限检查
-            if sender_id not in config["admins_id"]:
-                chain = MessageChain().message("此命令仅管理员有权使用")
-                await event.send(chain)
-                return
+            chain = self.check_user(sender_id, config, [event.get_platform_name()])
 
-            # 保存管理员的 umo
-            self._admin_umo = event.unified_msg_origin
+            if chain is None and self.config["notify_master"] != sender_id:
+                chain = MessageChain().message(
+                    "您不是被允许的接受消息的管理员，请检查配置项后重试。"
+                )
 
-            # 持久化保存到 banlist.json
-            self.ban_list["admin_umo"] = self._admin_umo
-            self.write_ban(self.ban_list)
+            if chain is None:
+                # 保存管理员的 umo
+                self._admin_umo = event.unified_msg_origin
 
-            logger.info(f"[违规通知] 管理员已注册，umo: {self._admin_umo}")
+                # 持久化保存到 banlist.json
+                self.ban_list["admin_umo"] = self._admin_umo
+                self.write_ban(self.ban_list)
 
-            chain = MessageChain().message(
-                f"✅ 管理员注册成功！\n"
-                f"现在可以接收违规消息的主动推送通知了。\n\n"
-                f"会话ID: {self._admin_umo}"
-            )
-            await event.send(chain)
+                logger.info(f"[违规通知] 管理员已注册，umo: {self._admin_umo}")
+
+                chain = MessageChain().message(
+                    f"✅ 管理员注册成功！\n"
+                    f"现在可以接收违规消息的主动推送通知了。\n\n"
+                    f"会话ID: {self._admin_umo}"
+                )
+        await event.send(chain)
 
     @filter.command("sf_notify")
     async def sf_notify(self, event: AstrMessageEvent, action: str = "check"):
@@ -478,10 +501,16 @@ class MyPlugin(Star):
                     chain = MessageChain().message("当前没有待通知的违规消息")
                 else:
                     notify_str = f"待通知的违规消息（共{len(self.ban_list['pending_notifications'])}条）：\n\n"
-                    for idx, item in enumerate(self.ban_list["pending_notifications"], 1):
-                        time_str = datetime.datetime.fromtimestamp(item["timestamp"]).strftime("%Y-%m-%d %H:%M:%S")
+                    for idx, item in enumerate(
+                        self.ban_list["pending_notifications"], 1
+                    ):
+                        time_str = datetime.datetime.fromtimestamp(
+                            item["timestamp"]
+                        ).strftime("%Y-%m-%d %H:%M:%S")
                         notify_str += f"[{idx}] {time_str}\n"
-                        notify_str += f"平台：{item['platform']} | 用户：{item['user_id']}\n"
+                        notify_str += (
+                            f"平台：{item['platform']} | 用户：{item['user_id']}\n"
+                        )
                         notify_str += f"消息：{item['message']}\n"
                         if item.get("reasoning"):
                             notify_str += f"审核理由：{item['reasoning']}\n"
@@ -494,7 +523,9 @@ class MyPlugin(Star):
                 self.write_ban(self.ban_list)
                 chain = MessageChain().message(f"已清空 {count} 条待通知的违规消息")
             else:
-                chain = MessageChain().message("无效的操作类型，请使用 'check' 或 'clear'")
+                chain = MessageChain().message(
+                    "无效的操作类型，请使用 'check' 或 'clear'"
+                )
 
         await event.send(chain)
 
@@ -569,6 +600,7 @@ class MyPlugin(Star):
             backup_path = data_dir / f"banlist.json.backup.{int(time.time())}"
             try:
                 import shutil
+
                 shutil.copy(file_path, backup_path)
                 logger.info(f"[违规通知] 已备份损坏文件到: {backup_path}")
             except Exception as backup_error:
@@ -652,7 +684,9 @@ class MyPlugin(Star):
                     event.stop_event()
 
             # 检查白名单（与封禁检查同在锁内，避免锁外读取竞态）
-            in_white_list = sender_id in self.ban_list["white_list"].get(sender_plat, [])
+            in_white_list = sender_id in self.ban_list["white_list"].get(
+                sender_plat, []
+            )
 
         if ban_chain is not None:
             await event.send(ban_chain)
@@ -701,23 +735,12 @@ class MyPlugin(Star):
 
         # 立即发送违规通知给管理员（如果开启了通知功能）
         if self.config.get("enable_notify", False):
-            # 提取 reasoning 文本内容
-            reasoning_text = ""
-            if filter_reasoning_res:
-                # filter_reasoning_res 可能是字符串或对象，需要安全提取
-                if isinstance(filter_reasoning_res, str):
-                    reasoning_text = filter_reasoning_res
-                else:
-                    # 如果是对象，尝试获取文本内容
-                    reasoning_text = str(filter_reasoning_res) if filter_reasoning_res else ""
-
             notification_item = {
                 "timestamp": time.time(),
                 "platform": sender_plat,
                 "user_id": sender_id,
                 "message": msg_str,
-                "reasoning": reasoning_text,
-                "retry_count": 0
+                "retry_count": 0,
             }
 
             logger.info(f"[违规通知] 检测到违规消息：用户 {sender_id}@{sender_plat}")
@@ -730,7 +753,9 @@ class MyPlugin(Star):
                 async with self._sf_lock:
                     self.ban_list["pending_notifications"].append(notification_item)
                     self.write_ban(self.ban_list)
-                    logger.warning(f"[违规通知] 通知发送失败，已加入重试队列（当前队列长度：{len(self.ban_list['pending_notifications'])}）")
+                    logger.warning(
+                        f"[违规通知] 通知发送失败，已加入重试队列（当前队列长度：{len(self.ban_list['pending_notifications'])}）"
+                    )
 
         speak_prompt_str = (
             await self.context.persona_manager.get_persona(self.config["speak_prompt"])
@@ -755,8 +780,6 @@ class MyPlugin(Star):
         chain = MessageChain().message(res_str)
         await event.send(chain)
         if self.config["debug_mode"]:
-            chain = MessageChain().message(
-                f"[DEBUG]reasoning content:{filter_reasoning_res}"
-            )
+            chain = MessageChain().message(f"[DEBUG]raw content:{filter_reasoning_res}")
             await event.send(chain)
         event.stop_event()
