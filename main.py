@@ -490,42 +490,39 @@ class MyPlugin(Star):
             config = self.context.get_config(event.unified_msg_origin)
             sender_id = event.get_sender_id()
 
-            # 权限检查
-            if sender_id not in config["admins_id"]:
-                chain = MessageChain().message("此命令仅管理员有权使用")
-                await event.send(chain)
-                return
+            chain = self.check_user(sender_id, config, [event.get_platform_name()])
 
-            if action == "check":
-                if not self.ban_list["pending_notifications"]:
-                    chain = MessageChain().message("当前没有待通知的违规消息")
+            if chain is None:
+                if action == "check":
+                    if not self.ban_list["pending_notifications"]:
+                        chain = MessageChain().message("当前没有待通知的违规消息")
+                    else:
+                        notify_str = f"待通知的违规消息（共{len(self.ban_list['pending_notifications'])}条）：\n\n"
+                        for idx, item in enumerate(
+                            self.ban_list["pending_notifications"], 1
+                        ):
+                            time_str = datetime.datetime.fromtimestamp(
+                                item["timestamp"]
+                            ).strftime("%Y-%m-%d %H:%M:%S")
+                            notify_str += f"[{idx}] {time_str}\n"
+                            notify_str += (
+                                f"平台：{item['platform']} | 用户：{item['user_id']}\n"
+                            )
+                            notify_str += f"消息：{item['message']}\n"
+                            if item.get("reasoning"):
+                                notify_str += f"审核理由：{item['reasoning']}\n"
+                            notify_str += "\n"
+                        notify_str += "使用 /sf_notify clear 清空所有待通知消息"
+                        chain = MessageChain().message(notify_str)
+                elif action == "clear":
+                    count = len(self.ban_list["pending_notifications"])
+                    self.ban_list["pending_notifications"] = []
+                    self.write_ban(self.ban_list)
+                    chain = MessageChain().message(f"已清空 {count} 条待通知的违规消息")
                 else:
-                    notify_str = f"待通知的违规消息（共{len(self.ban_list['pending_notifications'])}条）：\n\n"
-                    for idx, item in enumerate(
-                        self.ban_list["pending_notifications"], 1
-                    ):
-                        time_str = datetime.datetime.fromtimestamp(
-                            item["timestamp"]
-                        ).strftime("%Y-%m-%d %H:%M:%S")
-                        notify_str += f"[{idx}] {time_str}\n"
-                        notify_str += (
-                            f"平台：{item['platform']} | 用户：{item['user_id']}\n"
-                        )
-                        notify_str += f"消息：{item['message']}\n"
-                        if item.get("reasoning"):
-                            notify_str += f"审核理由：{item['reasoning']}\n"
-                        notify_str += "\n"
-                    notify_str += "使用 /sf_notify clear 清空所有待通知消息"
-                    chain = MessageChain().message(notify_str)
-            elif action == "clear":
-                count = len(self.ban_list["pending_notifications"])
-                self.ban_list["pending_notifications"] = []
-                self.write_ban(self.ban_list)
-                chain = MessageChain().message(f"已清空 {count} 条待通知的违规消息")
-            else:
-                chain = MessageChain().message(
-                    "无效的操作类型，请使用 'check' 或 'clear'"
-                )
+                    chain = MessageChain().message(
+                        "无效的操作类型，请使用 'check' 或 'clear'"
+                    )
 
         await event.send(chain)
 
