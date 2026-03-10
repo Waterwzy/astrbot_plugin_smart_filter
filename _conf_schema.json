@@ -79,5 +79,28 @@
                 }
             }
         }
+    },
+    "enable_notify" : {
+        "description" : "是否开启违规通知",
+        "hint" : "开启后，检测到违规消息时会立即通知管理员。管理员需使用 /sf_register_admin 命令注册后才能接收通知",
+        "type" : "bool",
+        "default" : false
+    },
+    "notify_master" : {
+        "description" : "接受事件的管理员id",
+        "hint" : "考虑到各个平台和实际需求，本插件仅开放单一管理员接受违规消息，请在设置/修改管理员后使用上面的指令完成注册（请同时保证管理员在astrbot列表中）",
+        "type" : "string"
+    },
+    "notify_retry_interval" : {
+        "description" : "通知重试间隔（秒）",
+        "hint" : "通知发送失败后，定期重试的时间间隔，默认60秒",
+        "type" : "int",
+        "default" : 60
+    },
+    "notify_max_retries" : {
+        "description" : "通知最大重试次数",
+        "hint" : "单条通知最多重试次数，超过后将丢弃，默认3次",
+        "type" : "int",
+        "default" : 3
     }
 }
