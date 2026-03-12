@@ -23,6 +23,12 @@
         "type" : "string",
         "default" : "block"
     },
+    "filter_group" : {
+        "description" : "是否对群聊消息开启审核",
+        "hint" : "关闭后，群聊消息不会经过审核，根据自身需求进行配置",
+        "type" : "bool",
+        "default" : true
+    },
     "filter_mode" : {
         "description" : "是否开启严格模式",
         "hint" : "严格模式：输出不含通过关键词就拒绝回复；非严格模式：输出含未通过关键词才拒绝回复",

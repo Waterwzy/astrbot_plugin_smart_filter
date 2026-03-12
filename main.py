@@ -14,11 +14,6 @@ from astrbot.api.star import Context, Star, StarTools
 
 # pyright: reportAttributeAccessIssue=false
 
-"""
-note：已知问题
-1.配置文件改动master时，如果不及时注册，消息无法及时切换到目标用户处发送。
-"""
-
 
 class MyPlugin(Star):
     def __init__(self, context: Context, config: AstrBotConfig):
@@ -154,6 +149,11 @@ class MyPlugin(Star):
 
         # 配置验证
         if self.config.get("enable_notify", False):
+            if self.config["notify_master"] not in self._admin_umo:
+                logger.info(
+                    f"检测到master id改动，取消{self._admin_umo}的消息接收权限。"
+                )
+                self._admin_umo = ""
             if not self._admin_umo:
                 logger.warning("[违规通知] 违规通知已启用，但管理员尚未注册")
                 logger.warning(
@@ -357,6 +357,8 @@ class MyPlugin(Star):
     @filter.command("sf_check")
     async def sf_check(self, event: AstrMessageEvent, plat_name: str | None = None):
         """检查用户发送的违规消息内容"""
+        if event.get_group_id() and not self.config["filter_group"]:
+            return
         async with self._sf_lock:
             config = self.context.get_config(event.unified_msg_origin)
 
