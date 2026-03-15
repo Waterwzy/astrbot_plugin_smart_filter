@@ -1,6 +1,6 @@
 name: astrbot_plugin_smart_filter 
 display_name: 用户输入审核 
 desc: 一个可用于角色扮演的过滤器插件 
-version: v1.2.1
+version: v1.2.2
 author: Waterwzy & HeartEase1
 repo: https://github.com/Waterwzy/astrbot_plugin_smart_filter 
