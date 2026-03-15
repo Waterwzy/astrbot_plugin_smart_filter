@@ -357,8 +357,6 @@ class MyPlugin(Star):
     @filter.command("sf_check")
     async def sf_check(self, event: AstrMessageEvent, plat_name: str | None = None):
         """检查用户发送的违规消息内容"""
-        if event.get_group_id() and not self.config["filter_group"]:
-            return
         async with self._sf_lock:
             config = self.context.get_config(event.unified_msg_origin)
 
@@ -657,6 +655,8 @@ class MyPlugin(Star):
         # 将所有 ban_list 访问都置于锁保护内，避免竞态条件
         async with self._sf_lock:
             if sender_plat not in self.ban_list["available_platforms"]:
+                return
+            if event.get_group_id() and not self.config["filter_group"]:
                 return
 
             # 定期全量清理过期封禁（避免字典无限膨胀）
