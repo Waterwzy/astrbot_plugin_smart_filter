@@ -241,7 +241,7 @@ class MyPlugin(Star):
     ) -> MessageChain | None:
         if user_id not in config["admins_id"]:
             chain = MessageChain().message(
-                "此用户仅管理员有权使用，你不是管理员，无权使用"
+                "此命令仅管理员有权使用，你不是管理员，无权使用"
             )
             logger.warning(f"非管理员用户尝试使用管理命令，user id:{user_id}")
             return chain
