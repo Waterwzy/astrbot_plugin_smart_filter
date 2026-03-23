@@ -8,7 +8,7 @@ on :
 
 jobs :
   check_format :
-    runs-on : unbuntu-latest
+    runs-on : ubuntu-latest
     steps :
       - uses : actions/checkout@v5
       - uses : actions/setup-python@v6
