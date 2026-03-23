@@ -61,6 +61,11 @@
         "hint" : "可以给你的违禁消息回复加上一个后缀",
         "type" : "text"
     },
+    "speak_fallback" : {
+        "description" : "违规消息回复失败通用回复",
+        "hint" : "如果以上选择的违规对话提供商返回失败，会直接使用这个消息回复，这条消息会带上前后缀",
+        "type" : "text"
+    },
     "available_platforms" : {
         "description" : "可用消息平台",
         "hint" : "你现在拥有的消息平台名称（例如aiocqhttp）",

@@ -767,15 +767,12 @@ class MyPlugin(Star):
             speak_res = await self.context.llm_generate(
                 chat_provider_id=self.config["speak_config"], contexts=msg
             )
+            speak_str = speak_res.completion_text
         except Exception:
             error_msg = traceback.format_exc()
             logger.error(error_msg)
-            return
-        res_str = (
-            self.config["speak_start"]
-            + speak_res.completion_text
-            + self.config["speak_end"]
-        )
+            speak_str = self.config["speak_fallback"]
+        res_str = self.config["speak_start"] + speak_str + self.config["speak_end"]
         chain = MessageChain().message(res_str)
         await event.send(chain)
         if self.config["debug_mode"]:
