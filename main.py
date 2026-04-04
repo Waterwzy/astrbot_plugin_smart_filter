@@ -33,6 +33,10 @@ class MyPlugin(Star):
         # 管理员的 unified_msg_origin，用于主动发送通知
         self._admin_umo: str = ""
 
+    @filter.command_group("sf")
+    def sf(self):
+        pass
+
     async def send_notify_to_admin(self, violation_info: dict) -> bool:
         """立即发送违规通知给管理员
 
@@ -264,7 +268,7 @@ class MyPlugin(Star):
                 return chain
         return None
 
-    @filter.command("sf_ban")
+    @sf.command("ban")
     async def sf_ban(
         self,
         event: AstrMessageEvent,
@@ -292,7 +296,7 @@ class MyPlugin(Star):
                 self.write_ban(self.ban_list)
         await event.send(chain)
 
-    @filter.command("sf_unban")
+    @sf.command("unban")
     async def sf_unban(
         self, event: AstrMessageEvent, user_id: str, plat_name: str | None = None
     ):
@@ -316,7 +320,7 @@ class MyPlugin(Star):
                     chain = MessageChain().message("解封操作成功！")
         await event.send(chain)
 
-    @filter.command("sf_bancount")
+    @sf.command("bancount")
     async def sf_bancount(
         self,
         event: AstrMessageEvent,
@@ -354,7 +358,7 @@ class MyPlugin(Star):
                 chain = MessageChain().message(res_str)
         await event.send(chain)
 
-    @filter.command("sf_check")
+    @sf.command("check")
     async def sf_check(self, event: AstrMessageEvent, plat_name: str | None = None):
         """检查用户发送的违规消息内容"""
         async with self._sf_lock:
@@ -391,7 +395,7 @@ class MyPlugin(Star):
                     flag = True
         return flag
 
-    @filter.command("sf_checkban")
+    @sf.command("checkban")
     async def sf_checkban(self, event: AstrMessageEvent, plat_name: str | None = None):
         """查看目前正在封禁的用户"""
         async with self._sf_lock:
@@ -417,7 +421,7 @@ class MyPlugin(Star):
                 chain = MessageChain().message(ban_str)
         await event.send(chain)
 
-    @filter.command("sf_clear")
+    @sf.command("clear")
     async def sf_clear(
         self, event: AstrMessageEvent, user_id: str, plat_name: str | None = None
     ):
@@ -445,7 +449,7 @@ class MyPlugin(Star):
                     chain = MessageChain().message(send_str)
         await event.send(chain)
 
-    @filter.command("sf_register_admin")
+    @sf.command("register")
     async def sf_register_admin(self, event: AstrMessageEvent):
         """注册管理员，保存 unified_msg_origin 用于接收违规通知
 
@@ -479,7 +483,7 @@ class MyPlugin(Star):
                 )
         await event.send(chain)
 
-    @filter.command("sf_notify")
+    @sf.command("notify")
     async def sf_notify(self, event: AstrMessageEvent, action: str = "check"):
         """查看或清空待通知的违规消息
 
@@ -644,10 +648,9 @@ class MyPlugin(Star):
                 pass
             logger.info("[违规通知] 已停止通知重试后台任务")
 
-    # 注册指令的装饰器。
     @filter.on_llm_request()
     async def check_request(self, event: AstrMessageEvent, req: ProviderRequest):
-        """这是一个检查用户输入的函数"""  # 这是 handler 的描述，将会被解析方便用户了解插件内容。建议填写。
+        """这是一个检查用户输入的函数"""
         sender_id = event.get_sender_id()
         msg_str = event.get_message_str()
         sender_plat = event.platform_meta.name
