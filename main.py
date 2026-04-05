@@ -243,12 +243,6 @@ class MyPlugin(Star):
         plat_name: list,
         times: str | None = None,
     ) -> MessageChain | None:
-        if user_id not in config["admins_id"]:
-            chain = MessageChain().message(
-                "此命令仅管理员有权使用，你不是管理员，无权使用"
-            )
-            logger.warning(f"非管理员用户尝试使用管理命令，user id:{user_id}")
-            return chain
         for plat in plat_name:
             if plat not in self.ban_list["available_platforms"]:
                 chain = MessageChain().message(f"消息平台{plat}不存在，请核实后重试")
@@ -268,6 +262,7 @@ class MyPlugin(Star):
                 return chain
         return None
 
+    @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("ban")
     async def sf_ban(
         self,
@@ -296,6 +291,7 @@ class MyPlugin(Star):
                 self.write_ban(self.ban_list)
         await event.send(chain)
 
+    @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("unban")
     async def sf_unban(
         self, event: AstrMessageEvent, user_id: str, plat_name: str | None = None
@@ -320,6 +316,7 @@ class MyPlugin(Star):
                     chain = MessageChain().message("解封操作成功！")
         await event.send(chain)
 
+    @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("bancount")
     async def sf_bancount(
         self,
@@ -358,6 +355,7 @@ class MyPlugin(Star):
                 chain = MessageChain().message(res_str)
         await event.send(chain)
 
+    @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("check")
     async def sf_check(self, event: AstrMessageEvent, plat_name: str | None = None):
         """检查用户发送的违规消息内容"""
@@ -395,6 +393,7 @@ class MyPlugin(Star):
                     flag = True
         return flag
 
+    @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("checkban")
     async def sf_checkban(self, event: AstrMessageEvent, plat_name: str | None = None):
         """查看目前正在封禁的用户"""
@@ -421,6 +420,7 @@ class MyPlugin(Star):
                 chain = MessageChain().message(ban_str)
         await event.send(chain)
 
+    @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("clear")
     async def sf_clear(
         self, event: AstrMessageEvent, user_id: str, plat_name: str | None = None
@@ -449,6 +449,7 @@ class MyPlugin(Star):
                     chain = MessageChain().message(send_str)
         await event.send(chain)
 
+    @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("register")
     async def sf_register_admin(self, event: AstrMessageEvent):
         """注册管理员，保存 unified_msg_origin 用于接收违规通知
@@ -483,6 +484,7 @@ class MyPlugin(Star):
                 )
         await event.send(chain)
 
+    @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("notify")
     async def sf_notify(self, event: AstrMessageEvent, action: str = "check"):
         """查看或清空待通知的违规消息
