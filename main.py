@@ -94,7 +94,11 @@ class MyPlugin(Star):
         """定期重试发送失败的通知"""
         while True:
             try:
-                await asyncio.sleep(self.config.get("notify_retry_interval", 60))
+                await asyncio.sleep(
+                    self.config.get("notify_config", {}).get(
+                        "notify_retry_intrvael", 60
+                    )
+                )
 
                 async with self._sf_lock:
                     # 检查 ban_list 是否已初始化
@@ -103,7 +107,9 @@ class MyPlugin(Star):
                     ):
                         continue
 
-                    max_retries = self.config.get("notify_max_retries", 3)
+                    max_retries = self.config.get("notify_config", {}).get(
+                        "notify_max_retries", 3
+                    )
                     failed_items = []
 
                     for item in self.ban_list["pending_notifications"]:
@@ -152,8 +158,8 @@ class MyPlugin(Star):
                 logger.info(f"[违规通知] 已恢复管理员注册信息，umo: {self._admin_umo}")
 
         # 配置验证
-        if self.config.get("enable_notify", False):
-            if self.config["notify_master"] not in self._admin_umo:
+        if self.config.get("notify_config", {}).get("enable_notify", False):
+            if self.config["notify_config"]["notify_master"] not in self._admin_umo:
                 logger.info(
                     f"检测到master id改动，取消{self._admin_umo}的消息接收权限。"
                 )
@@ -163,14 +169,14 @@ class MyPlugin(Star):
                 logger.warning(
                     "[违规通知] 请使用 /sf_register_admin 命令注册管理员以接收通知"
                 )
-            elif self.config["notify_master"] == "":
+            elif self.config["notify_config"]["notify_master"] == "":
                 logger.warning(
                     "[违规通知]：违规消息已启用，但是未设置消息接收者，请在配置项中输入接收者ID"
                 )
             else:
                 logger.info("[违规通知] 已启用违规通知功能，通知将发送至管理员")
                 logger.info(
-                    f"[违规通知] 重试配置：间隔 {self.config.get('notify_retry_interval', 60)}秒，最多重试 {self.config.get('notify_max_retries', 3)}次"
+                    f"[违规通知] 重试配置：间隔 {self.config.get('notify_config', {}).get('notify_retry_intrvael', 60)}秒，最多重试 {self.config.get('notify_config', {}).get('notify_max_retries', 3)}次"
                 )
 
                 # 启动后台重试任务
@@ -185,22 +191,24 @@ class MyPlugin(Star):
     async def handle_update(self):
         """处理配置项的更新行为"""
         for key in list(self.ban_list["prohibits"]):
-            if key not in self.config["available_platforms"]:
+            if key not in self.config["platform_config"]["available_platforms"]:
                 self.ban_list["prohibits"].pop(key, None)
         for key in list(self.ban_list["banners"]):
-            if key not in self.config["available_platforms"]:
+            if key not in self.config["platform_config"]["available_platforms"]:
                 self.ban_list["banners"].pop(key, None)
         for key in list(self.ban_list["white_list"]):
-            if key not in self.config["available_platforms"]:
+            if key not in self.config["platform_config"]["available_platforms"]:
                 self.ban_list["white_list"].pop(key, None)
-        for key in self.config["available_platforms"]:
+        for key in self.config["platform_config"]["available_platforms"]:
             if key not in self.ban_list["prohibits"]:
                 self.ban_list["prohibits"][key] = {}
             if key not in self.ban_list["banners"]:
                 self.ban_list["banners"][key] = {}
             if key not in self.ban_list["white_list"]:
                 self.ban_list["white_list"][key] = []
-        self.ban_list["available_platforms"] = self.config["available_platforms"]
+        self.ban_list["available_platforms"] = self.config["platform_config"][
+            "available_platforms"
+        ]
         await self.handle_white_list_update(self.config)
         self.write_ban(self.ban_list)
 
@@ -208,7 +216,7 @@ class MyPlugin(Star):
         """处理白名单的更新行为"""
         for key in self.ban_list["available_platforms"]:
             self.ban_list["white_list"][key] = []
-        for user_item in config["white_list"]:
+        for user_item in config["platform_config"]["white_list"]:
             if (
                 user_item["__template_key"] != "white_list_temp"
                 or user_item["platform"] not in self.ban_list["available_platforms"]
@@ -363,7 +371,7 @@ class MyPlugin(Star):
             config = self.context.get_config(event.unified_msg_origin)
 
             if plat_name is None:
-                plat_list = self.config["available_platforms"]
+                plat_list = self.config["platform_config"]["available_platforms"]
             else:
                 plat_list = [plat_name]
 
@@ -462,7 +470,10 @@ class MyPlugin(Star):
 
             chain = self.check_user(sender_id, config, [event.get_platform_name()])
 
-            if chain is None and self.config["notify_master"] != sender_id:
+            if (
+                chain is None
+                and self.config["notify_config"]["notify_master"] != sender_id
+            ):
                 chain = MessageChain().message(
                     "您不是被允许的接受消息的管理员，请检查配置项后重试。"
                 )
@@ -661,7 +672,10 @@ class MyPlugin(Star):
         async with self._sf_lock:
             if sender_plat not in self.ban_list["available_platforms"]:
                 return
-            if event.get_group_id() and not self.config["filter_group"]:
+            if (
+                event.get_group_id()
+                and not self.config["filter_config"]["filter_group"]
+            ):
                 return
 
             # 定期全量清理过期封禁（避免字典无限膨胀）
@@ -702,7 +716,9 @@ class MyPlugin(Star):
             return
 
         system_prompt = (
-            await self.context.persona_manager.get_persona(self.config["filter_prompt"])
+            await self.context.persona_manager.get_persona(
+                self.config["filter_config"]["filter_prompt"]
+            )
         ).system_prompt
         msg = [
             {"role": "system", "content": system_prompt},
@@ -711,13 +727,20 @@ class MyPlugin(Star):
         # logger.warning(f"获取personl类：{system_prompt}")
         try:
             filter_res = await self.context.llm_generate(
-                chat_provider_id=self.config["filter_config"], contexts=msg
+                chat_provider_id=self.config["filter_config"]["filter_provider"],
+                contexts=msg,
             )
-            if self.config["filter_mode"]:
-                if self.config["filter_allow"] in filter_res.completion_text:
+            if self.config["filter_config"]["filter_mode"]:
+                if (
+                    self.config["filter_config"]["filter_allow"]
+                    in filter_res.completion_text
+                ):
                     return
             else:
-                if self.config["filter_block"] not in filter_res.completion_text:
+                if (
+                    self.config["filter_config"]["filter_block"]
+                    not in filter_res.completion_text
+                ):
                     return
             filter_reasoning_res = filter_res.raw_completion or ""
         except Exception:
@@ -738,7 +761,7 @@ class MyPlugin(Star):
             self.write_ban(self.ban_list)
 
         # 立即发送违规通知给管理员（如果开启了通知功能）
-        if self.config.get("enable_notify", False):
+        if self.config.get("notify_config", {}).get("enable_notify", False):
             notification_item = {
                 "timestamp": time.time(),
                 "platform": sender_plat,
@@ -762,7 +785,9 @@ class MyPlugin(Star):
                     )
 
         speak_prompt_str = (
-            await self.context.persona_manager.get_persona(self.config["speak_prompt"])
+            await self.context.persona_manager.get_persona(
+                self.config["speak_config"]["speak_prompt"]
+            )
         ).system_prompt
         msg = [
             {"role": "system", "content": speak_prompt_str},
@@ -770,17 +795,22 @@ class MyPlugin(Star):
         ]
         try:
             speak_res = await self.context.llm_generate(
-                chat_provider_id=self.config["speak_config"], contexts=msg
+                chat_provider_id=self.config["speak_config"]["speak_provider"],
+                contexts=msg,
             )
             speak_str = speak_res.completion_text
         except Exception:
             error_msg = traceback.format_exc()
             logger.error(error_msg)
-            speak_str = self.config["speak_fallback"]
-        res_str = self.config["speak_start"] + speak_str + self.config["speak_end"]
+            speak_str = self.config["speak_config"]["speak_fallback"]
+        res_str = (
+            self.config["speak_config"]["speak_start"]
+            + speak_str
+            + self.config["speak_config"]["speak_end"]
+        )
         chain = MessageChain().message(res_str)
         await event.send(chain)
-        if self.config["debug_mode"]:
+        if self.config["filter_config"]["debug_mode"]:
             chain = MessageChain().message(f"[DEBUG]raw content:{filter_reasoning_res}")
             await event.send(chain)
         event.stop_event()
