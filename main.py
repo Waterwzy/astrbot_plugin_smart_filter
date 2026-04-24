@@ -72,7 +72,7 @@ class MyPlugin(Star):
             notify_msg += f"💬 消息：{msg_content}\n"
 
             notify_msg += "━━━━━━━━━━━━━━━━\n"
-            notify_msg += f"💡 使用 /sf_check {violation_info['user_id']} 查看详情"
+            notify_msg += f"💡 使用 /sf check {violation_info['platform']} 查看详情"
 
             # 创建消息链
             chain = MessageChain().message(notify_msg)
@@ -161,13 +161,13 @@ class MyPlugin(Star):
         if self.config.get("notify_config", {}).get("enable_notify", False):
             if self.config["notify_config"]["notify_master"] not in self._admin_umo:
                 logger.info(
-                    f"检测到master id改动，取消{self._admin_umo}的消息接收权限。"
+                    f"[违规通知] 检测到master id改动，取消{self._admin_umo}的消息接收权限。"
                 )
                 self._admin_umo = ""
             if not self._admin_umo:
                 logger.warning("[违规通知] 违规通知已启用，但管理员尚未注册")
                 logger.warning(
-                    "[违规通知] 请使用 /sf_register_admin 命令注册管理员以接收通知"
+                    "[违规通知] 请使用 /sf register 命令注册管理员以接收通知"
                 )
             elif self.config["notify_config"]["notify_master"] == "":
                 logger.warning(
@@ -529,7 +529,7 @@ class MyPlugin(Star):
                             if item.get("reasoning"):
                                 notify_str += f"审核理由：{item['reasoning']}\n"
                             notify_str += "\n"
-                        notify_str += "使用 /sf_notify clear 清空所有待通知消息"
+                        notify_str += "使用 /sf notify clear 清空所有待通知消息"
                         chain = MessageChain().message(notify_str)
                 elif action == "clear":
                     count = len(self.ban_list["pending_notifications"])
