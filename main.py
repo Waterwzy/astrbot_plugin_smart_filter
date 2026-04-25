@@ -282,8 +282,8 @@ class MyPlugin(Star):
         async with self._sf_lock:
             if plat_name is None:
                 plat_name = event.platform_meta.name
-            config = self.context.get_config(event.unified_msg_origin)
-            chain = self.check_user(event.get_sender_id(),[plat_name], times)
+            self.context.get_config(event.unified_msg_origin)
+            chain = self.check_user(event.get_sender_id(), [plat_name], times)
 
             if chain is None:
                 ban_time = pendulum.parse(times)
@@ -305,7 +305,7 @@ class MyPlugin(Star):
     ):
         """按照id手动解封某位用户"""
         async with self._sf_lock:
-            config = self.context.get_config(event.unified_msg_origin)
+            self.context.get_config(event.unified_msg_origin)
 
             if plat_name is None:
                 plat_name = event.platform_meta.name
@@ -334,7 +334,7 @@ class MyPlugin(Star):
     ):
         """按照封禁次数自动封禁一批用户一段时间"""
         async with self._sf_lock:
-            config = self.context.get_config(event.unified_msg_origin)
+            self.context.get_config(event.unified_msg_origin)
 
             if plat_name is not None:
                 plat_list = [plat_name]
@@ -367,7 +367,7 @@ class MyPlugin(Star):
     async def sf_check(self, event: AstrMessageEvent, plat_name: str | None = None):
         """检查用户发送的违规消息内容"""
         async with self._sf_lock:
-            config = self.context.get_config(event.unified_msg_origin)
+            self.context.get_config(event.unified_msg_origin)
 
             if plat_name is None:
                 plat_list = self.config["platform_config"]["available_platforms"]
@@ -405,7 +405,7 @@ class MyPlugin(Star):
     async def sf_checkban(self, event: AstrMessageEvent, plat_name: str | None = None):
         """查看目前正在封禁的用户"""
         async with self._sf_lock:
-            config = self.context.get_config(event.unified_msg_origin)
+            self.context.get_config(event.unified_msg_origin)
 
             if plat_name is not None:
                 plat_list = [plat_name]
@@ -434,7 +434,7 @@ class MyPlugin(Star):
     ):
         """手动清理特定用户的违规记录（默认清理找到的第一个）"""
         async with self._sf_lock:
-            config = self.context.get_config(event.unified_msg_origin)
+            self.context.get_config(event.unified_msg_origin)
 
             if plat_name is None:
                 plat_list = self.ban_list["available_platforms"]
@@ -464,7 +464,7 @@ class MyPlugin(Star):
         管理员需要先执行此命令，才能接收主动推送的违规通知
         """
         async with self._sf_lock:
-            config = self.context.get_config(event.unified_msg_origin)
+            self.context.get_config(event.unified_msg_origin)
             sender_id = event.get_sender_id()
 
             chain = self.check_user(sender_id, [event.get_platform_name()])
@@ -503,7 +503,7 @@ class MyPlugin(Star):
             action: 操作类型，"check"查看待通知消息，"clear"清空待通知消息
         """
         async with self._sf_lock:
-            config = self.context.get_config(event.unified_msg_origin)
+            self.context.get_config(event.unified_msg_origin)
             sender_id = event.get_sender_id()
 
             chain = self.check_user(sender_id, [event.get_platform_name()])
