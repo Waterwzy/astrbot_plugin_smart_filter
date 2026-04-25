@@ -247,7 +247,6 @@ class MyPlugin(Star):
     def check_user(
         self,
         user_id: str,
-        config: AstrBotConfig,
         plat_name: list,
         times: str | None = None,
     ) -> MessageChain | None:
@@ -284,7 +283,7 @@ class MyPlugin(Star):
             if plat_name is None:
                 plat_name = event.platform_meta.name
             config = self.context.get_config(event.unified_msg_origin)
-            chain = self.check_user(event.get_sender_id(), config, [plat_name], times)
+            chain = self.check_user(event.get_sender_id(),[plat_name], times)
 
             if chain is None:
                 ban_time = pendulum.parse(times)
@@ -311,7 +310,7 @@ class MyPlugin(Star):
             if plat_name is None:
                 plat_name = event.platform_meta.name
 
-            chain = self.check_user(event.get_sender_id(), config, [plat_name])
+            chain = self.check_user(event.get_sender_id(), [plat_name])
             if chain is None:
                 if user_id not in self.ban_list["banners"][plat_name]:
                     chain = MessageChain().message("该用户不在封禁列表中，请核实后重试")
@@ -342,7 +341,7 @@ class MyPlugin(Star):
             else:
                 plat_list = self.ban_list["available_platforms"]
 
-            chain = self.check_user(event.get_sender_id(), config, plat_list, times)
+            chain = self.check_user(event.get_sender_id(), plat_list, times)
 
             if chain is None:
                 if await self.unban_all():
@@ -375,7 +374,7 @@ class MyPlugin(Star):
             else:
                 plat_list = [plat_name]
 
-            chain = self.check_user(event.get_sender_id(), config, plat_list)
+            chain = self.check_user(event.get_sender_id(), plat_list)
 
             if chain is None:
                 if await self.unban_all():
@@ -413,7 +412,7 @@ class MyPlugin(Star):
             else:
                 plat_list = self.ban_list["available_platforms"]
 
-            chain = self.check_user(event.get_sender_id(), config, plat_list)
+            chain = self.check_user(event.get_sender_id(), plat_list)
 
             if chain is None:
                 if await self.unban_all():
@@ -442,7 +441,7 @@ class MyPlugin(Star):
             else:
                 plat_list = [plat_name]
 
-            chain = self.check_user(event.get_sender_id(), config, plat_list)
+            chain = self.check_user(event.get_sender_id(), plat_list)
 
             if chain is None:
                 for plat in plat_list:
@@ -468,7 +467,7 @@ class MyPlugin(Star):
             config = self.context.get_config(event.unified_msg_origin)
             sender_id = event.get_sender_id()
 
-            chain = self.check_user(sender_id, config, [event.get_platform_name()])
+            chain = self.check_user(sender_id, [event.get_platform_name()])
 
             if (
                 chain is None
@@ -507,7 +506,7 @@ class MyPlugin(Star):
             config = self.context.get_config(event.unified_msg_origin)
             sender_id = event.get_sender_id()
 
-            chain = self.check_user(sender_id, config, [event.get_platform_name()])
+            chain = self.check_user(sender_id, [event.get_platform_name()])
 
             if chain is None:
                 if action == "check":
