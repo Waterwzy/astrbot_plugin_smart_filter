@@ -119,9 +119,9 @@
                 "type" : "bool",
                 "default" : false
             },
-            "notify_master" : {
-                "description" : "接受提醒事件的管理员id",
-                "hint" : "考虑到各个平台和实际需求，本插件仅开放单一管理员接受违规消息，请在设置/修改管理员后使用上面的指令完成注册（请同时保证管理员在astrbot列表中）",
+            "notify_umo" : {
+                "description" : "接受提醒事件的会话umo",
+                "hint" : "考虑到各个平台和实际需求，本插件仅开放单一会话接受违规消息，umo可以在会话中输入命令/sid查看",
                 "type" : "string"
             },
             "notify_retry_intrvael" : {

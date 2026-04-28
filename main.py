@@ -159,22 +159,13 @@ class MyPlugin(Star):
 
         # 配置验证
         if self.config.get("notify_config", {}).get("enable_notify", False):
-            if self.config["notify_config"]["notify_master"] not in self._admin_umo:
-                logger.info(
-                    f"[违规通知] 检测到master id改动，取消{self._admin_umo}的消息接收权限。"
-                )
-                self._admin_umo = ""
-            if not self._admin_umo:
-                logger.warning("[违规通知] 违规通知已启用，但管理员尚未注册")
-                logger.warning(
-                    "[违规通知] 请使用 /sf register 命令注册管理员以接收通知"
-                )
-            elif self.config["notify_config"]["notify_master"] == "":
-                logger.warning(
-                    "[违规通知]：违规消息已启用，但是未设置消息接收者，请在配置项中输入接收者ID"
-                )
+            if not self.config["notify_config"]["notify_umo"]:
+                logger.warning("[违规通知]已启用违规通知功能，但管理员尚未注册")
             else:
+                self._admin_umo = self.config["notify_config"]["notify_umo"]
                 logger.info("[违规通知] 已启用违规通知功能，通知将发送至管理员")
+                async with self._sf_lock:
+                    self.write_ban(self.ban_list)
                 logger.info(
                     f"[违规通知] 重试配置：间隔 {self.config.get('notify_config', {}).get('notify_retry_intrvael', 60)}秒，最多重试 {self.config.get('notify_config', {}).get('notify_max_retries', 3)}次"
                 )
@@ -443,43 +434,6 @@ class MyPlugin(Star):
                 if not chain:
                     send_str = f"未找到用户{user_id}的违规消息，请使用/sf_check来查看当前记录的所有平台的违规消息"
                     chain = MessageChain().message(send_str)
-        await event.send(chain)
-
-    @filter.permission_type(filter.PermissionType.ADMIN)
-    @sf.command("register")
-    async def sf_register_admin(self, event: AstrMessageEvent):
-        """注册管理员，保存 unified_msg_origin 用于接收违规通知
-
-        管理员需要先执行此命令，才能接收主动推送的违规通知
-        """
-        async with self._sf_lock:
-            sender_id = event.get_sender_id()
-
-            chain = self.check_user(sender_id, [event.get_platform_name()])
-
-            if (
-                chain is None
-                and self.config["notify_config"]["notify_master"] != sender_id
-            ):
-                chain = MessageChain().message(
-                    "您不是被允许的接受消息的管理员，请检查配置项后重试。"
-                )
-
-            if chain is None:
-                # 保存管理员的 umo
-                self._admin_umo = event.unified_msg_origin
-
-                # 持久化保存到 banlist.json
-                self.ban_list["admin_umo"] = self._admin_umo
-                self.write_ban(self.ban_list)
-
-                logger.info(f"[违规通知] 管理员已注册，umo: {self._admin_umo}")
-
-                chain = MessageChain().message(
-                    f"✅ 管理员注册成功！\n"
-                    f"现在可以接收违规消息的主动推送通知了。\n\n"
-                    f"会话ID: {self._admin_umo}"
-                )
         await event.send(chain)
 
     @filter.permission_type(filter.PermissionType.ADMIN)
