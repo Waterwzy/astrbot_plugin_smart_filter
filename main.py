@@ -49,9 +49,7 @@ class MyPlugin(Star):
         try:
             # 检查是否已注册管理员 umo
             if not self._admin_umo:
-                logger.warning(
-                    "[违规通知] 管理员未注册，请先使用 /sf_register_admin 命令注册"
-                )
+                logger.warning("[违规通知] 管理员未注册，请先通过配置项添加会话umo注册")
                 return False
 
             # 构建通知消息（优化格式，添加长度限制）
@@ -152,17 +150,13 @@ class MyPlugin(Star):
             self.ban_list = self.get_ban_list()
             await self.handle_update()
 
-            # 从持久化存储中恢复管理员 umo
-            if self.ban_list.get("admin_umo"):
-                self._admin_umo = self.ban_list["admin_umo"]
-                logger.info(f"[违规通知] 已恢复管理员注册信息，umo: {self._admin_umo}")
-
         # 配置验证
         if self.config.get("notify_config", {}).get("enable_notify", False):
             if not self.config["notify_config"]["notify_umo"]:
                 logger.warning("[违规通知]已启用违规通知功能，但管理员尚未注册")
             else:
                 self._admin_umo = self.config["notify_config"]["notify_umo"]
+                self.ban_list["admin_umo"] = self._admin_umo
                 logger.info("[违规通知] 已启用违规通知功能，通知将发送至管理员")
                 async with self._sf_lock:
                     self.write_ban(self.ban_list)
