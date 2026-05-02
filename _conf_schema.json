@@ -49,6 +49,12 @@
         "description" : "违规回复模型（第二个llm）相关配置",
         "type" : "object",
         "items" : {
+            "enable_speak" : {
+                "description" : "是否开启第二个llm",
+                "hint" : "开启后，遇到违规消息会使用llm生成回复；否则直接使用「违规消息回复失败通用回复」作为回复内容。关闭前请确保已填写通用回复，否则用户将收到空白消息",
+                "type" : "bool",
+                "default" : true
+            },
             "speak_prompt" : {
                 "description" : "违禁对话人设",
                 "hint" : "如果发现消息违禁，将会使用这个人设进行回复",
@@ -115,7 +121,7 @@
         "items" : {
             "enable_notify" : {
                 "description" : "是否开启违规通知",
-                "hint" : "开启后，检测到违规消息时会立即通知管理员。管理员需使用 /sf register 命令注册后才能接收通知",
+                "hint" : "开启后，检测到违规消息时会立即通知管理员。管理员需在配置中添加会话umo才能接收通知",
                 "type" : "bool",
                 "default" : false
             },

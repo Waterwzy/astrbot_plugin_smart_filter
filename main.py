@@ -595,6 +595,13 @@ class MyPlugin(Star):
                 pass
             logger.info("[违规通知] 已停止通知重试后台任务")
 
+    def create_speak_msg(self, getin: str) -> str:
+        return (
+            self.config["speak_config"]["speak_start"]
+            + getin
+            + self.config["speak_config"]["speak_end"]
+        )
+
     @filter.on_llm_request()
     async def check_request(self, event: AstrMessageEvent, req: ProviderRequest):
         """这是一个检查用户输入的函数"""
@@ -718,30 +725,32 @@ class MyPlugin(Star):
                         f"[违规通知] 通知发送失败，已加入重试队列（当前队列长度：{len(self.ban_list['pending_notifications'])}）"
                     )
 
-        speak_prompt_str = (
-            await self.context.persona_manager.get_persona(
-                self.config["speak_config"]["speak_prompt"]
+        if self.config["speak_config"]["enable_speak"]:
+            speak_prompt_str = (
+                await self.context.persona_manager.get_persona(
+                    self.config["speak_config"]["speak_prompt"]
+                )
+            ).system_prompt
+            msg = [
+                {"role": "system", "content": speak_prompt_str},
+                {"role": "user", "content": msg_str},
+            ]
+            try:
+                speak_res = await self.context.llm_generate(
+                    chat_provider_id=self.config["speak_config"]["speak_provider"],
+                    contexts=msg,
+                )
+                speak_str = speak_res.completion_text
+            except Exception:
+                error_msg = traceback.format_exc()
+                logger.error(error_msg)
+                speak_str = self.config["speak_config"]["speak_fallback"]
+            res_str = self.create_speak_msg(speak_str)
+        else:
+            logger.info("当前不使用第二个llm生成回复，使用默认回复")
+            res_str = self.create_speak_msg(
+                self.config["speak_config"]["speak_fallback"]
             )
-        ).system_prompt
-        msg = [
-            {"role": "system", "content": speak_prompt_str},
-            {"role": "user", "content": msg_str},
-        ]
-        try:
-            speak_res = await self.context.llm_generate(
-                chat_provider_id=self.config["speak_config"]["speak_provider"],
-                contexts=msg,
-            )
-            speak_str = speak_res.completion_text
-        except Exception:
-            error_msg = traceback.format_exc()
-            logger.error(error_msg)
-            speak_str = self.config["speak_config"]["speak_fallback"]
-        res_str = (
-            self.config["speak_config"]["speak_start"]
-            + speak_str
-            + self.config["speak_config"]["speak_end"]
-        )
         chain = MessageChain().message(res_str)
         await event.send(chain)
         if self.config["filter_config"]["debug_mode"]:
