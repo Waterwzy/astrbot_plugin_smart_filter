@@ -156,10 +156,7 @@ class MyPlugin(Star):
                 logger.warning("[违规通知]已启用违规通知功能，但管理员尚未注册")
             else:
                 self._admin_umo = self.config["notify_config"]["notify_umo"]
-                self.ban_list["admin_umo"] = self._admin_umo
                 logger.info("[违规通知] 已启用违规通知功能，通知将发送至管理员")
-                async with self._sf_lock:
-                    self.write_ban(self.ban_list)
                 logger.info(
                     f"[违规通知] 重试配置：间隔 {self.config.get('notify_config', {}).get('notify_retry_intrvael', 60)}秒，最多重试 {self.config.get('notify_config', {}).get('notify_max_retries', 3)}次"
                 )
@@ -503,12 +500,7 @@ class MyPlugin(Star):
                 "name": "pending_notifications",
                 "type": list,
                 "default": [],
-            },
-            {
-                "name": "admin_umo",
-                "type": str,
-                "default": None,
-            },
+            }
         ]
         for std_item in legal_list_format:
             if not (
@@ -532,7 +524,6 @@ class MyPlugin(Star):
                 "banners": {},
                 "white_list": {},
                 "pending_notifications": [],
-                "admin_umo": None,
             }
             with open(file_path, "w", encoding="utf-8") as f:
                 json.dump(default_banlist, f, ensure_ascii=False, indent=4)
