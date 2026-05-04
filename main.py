@@ -500,7 +500,7 @@ class MyPlugin(Star):
                 "name": "pending_notifications",
                 "type": list,
                 "default": [],
-            }
+            },
         ]
         for std_item in legal_list_format:
             if not (
