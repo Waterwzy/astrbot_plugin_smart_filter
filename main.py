@@ -68,6 +68,7 @@ class MyPlugin(Star):
             notify_msg += f"📱 平台：{violation_info['platform']}\n"
             notify_msg += f"👤 用户：{violation_info['user_id']}\n"
             notify_msg += f"💬 消息：{msg_content}\n"
+            notify_msg += f"📊 总计违规次数：{violation_info['counts']}\n"
 
             notify_msg += "━━━━━━━━━━━━━━━━\n"
             notify_msg += f"💡 使用 /sf check {violation_info['platform']} 查看详情"
@@ -699,6 +700,7 @@ class MyPlugin(Star):
                 "platform": sender_plat,
                 "user_id": sender_id,
                 "message": msg_str,
+                "counts": len(self.ban_list["prohibits"][sender_plat][sender_id]),
                 "retry_count": 0,
             }
 
