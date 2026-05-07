@@ -20,21 +20,25 @@ class MyPlugin(Star):
         """同步初始化行为，主要是为了定义自身的各种属性"""
         super().__init__(context)
         self.config = config
+        """从AstrBot导入的插件配置"""
         self.ban_list = {}
+        """插件核心持久化数据，记录了消息平台；违规记录；封禁信息等"""
         self._sf_lock = asyncio.Lock()
-        # 记录上次全量清理过期封禁的时间戳，用于定期触发 unban_all
+        """smart_filter全局互斥锁，保护ban_list读写和文件安全"""
         self._last_unban_ts: float = 0.0
-        # 全量清理的最小间隔（秒），默认 5 分钟
+        """记录上次全量清理过期封禁的时间戳，用于定期触发 unban_all"""
         self._unban_interval: float = 300.0
-        # 记录上次重试通知的时间戳
+        """全量清理的最小间隔（秒），默认 5 分钟"""
         self._last_retry_ts: float = 0.0
-        # 后台重试任务
+        """记录上次重试通知的时间戳"""
         self._retry_task = None
-        # 管理员的 unified_msg_origin，用于主动发送通知
+        """后台重试任务"""
         self._admin_umo: str = ""
+        """管理员的 unified_msg_origin，用于主动发送通知"""
 
     @filter.command_group("sf")
     def sf(self):
+        self._retry_task
         pass
 
     async def send_notify_to_admin(self, violation_info: dict) -> bool:
@@ -212,6 +216,16 @@ class MyPlugin(Star):
     async def ban_user(
         self, user_id: str, platform: str, times: pendulum.Duration
     ) -> tuple:
+        """封禁某位用户一段时间。
+        Args:
+            user_id(str):封禁的用户id
+            platform(str):封禁用户所在的消息平台
+            times(pemdulum.Duration):封禁用户时间
+        Returns:
+            tuple:(status:str,detail:str)
+            status:是否封禁成功，成功为'Success',否则为'Fail'
+            detail:详细消息，如果status为'Success'返回格式化的解封时间，为'Fail'则返回失败原因(用户正在封禁中)
+        """
         if user_id in self.ban_list["banners"][platform]:
             if self.ban_list["banners"][platform][user_id] <= time.time():
                 self.ban_list["banners"][platform].pop(user_id)
@@ -232,6 +246,14 @@ class MyPlugin(Star):
         plat_name: list,
         times: str | None = None,
     ) -> MessageChain | None:
+        """验证指令合法性
+        Args:
+            plat_name(list):指令涉及的所有消息平台的列表
+            times(str|None):如果指令涉及时间，则传入ISO8601字符串，否则传入None
+        Returns:
+            MessageChain|None
+            如果鉴权失败，则返回可以直接发送的消息链；鉴权成功返回None
+        """
         for plat in plat_name:
             if plat not in self.ban_list["available_platforms"]:
                 chain = MessageChain().message(f"消息平台{plat}不存在，请核实后重试")
@@ -260,7 +282,13 @@ class MyPlugin(Star):
         times: str,
         plat_name: str | None = None,
     ):
-        """按照id封禁某位用户一段时间"""
+        """按照id封禁某位用户一段时间
+        Args:
+            event(AstrMessageEvent):AstrBot消息事件
+            user_id(str):需要封禁的用户id
+            times(str):需要封禁的时间
+            plat_name(str|None):封禁的消息平台，默认为None，即当前指令所在的消息平台
+        """
         async with self._sf_lock:
             if plat_name is None:
                 plat_name = event.platform_meta.name
@@ -284,7 +312,12 @@ class MyPlugin(Star):
     async def sf_unban(
         self, event: AstrMessageEvent, user_id: str, plat_name: str | None = None
     ):
-        """按照id手动解封某位用户"""
+        """按照id手动解封某位用户
+        Args:
+            event(AstrMessageEvent):AstrBot消息事件
+            user_id(str):需要解封禁的用户id
+            plat_name(str|None):解封禁的消息平台，默认为None，即当前指令所在的消息平台
+        """
         async with self._sf_lock:
             if plat_name is None:
                 plat_name = event.platform_meta.name
@@ -311,7 +344,13 @@ class MyPlugin(Star):
         times: str,
         plat_name: str | None = None,
     ):
-        """按照封禁次数自动封禁一批用户一段时间"""
+        """按照封禁次数自动封禁一批用户一段时间
+        Args:
+            event(AstrMessageEvent):AstrBot消息事件
+            cout(int):封禁消息数量阈值
+            times(str):需要封禁的时间
+            plat_name(str|None):封禁的消息平台，默认为None，即当前指令所在的消息平台
+        """
         async with self._sf_lock:
             if plat_name is not None:
                 plat_list = [plat_name]
@@ -342,7 +381,11 @@ class MyPlugin(Star):
     @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("check")
     async def sf_check(self, event: AstrMessageEvent, plat_name: str | None = None):
-        """检查用户发送的违规消息内容"""
+        """检查用户发送的违规消息内容
+        Args:
+            event(AstrMessageEvent):AstrBot消息事件
+            plat_name(str|None):需要检查的消息平台，默认为None，即插件配置的所有消息平台
+        """
         async with self._sf_lock:
             if plat_name is None:
                 plat_list = self.config["platform_config"]["available_platforms"]
@@ -366,6 +409,10 @@ class MyPlugin(Star):
         await event.send(chain)
 
     async def unban_all(self):
+        """解封到达封禁期限的用户
+        Returns:
+            bool:是否有用户在函数内被解封
+        """
         flag = False
         for key_p, item_plat in list(self.ban_list["banners"].items()):
             for key, item in list(item_plat.items()):
@@ -378,7 +425,11 @@ class MyPlugin(Star):
     @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("checkban")
     async def sf_checkban(self, event: AstrMessageEvent, plat_name: str | None = None):
-        """查看目前正在封禁的用户"""
+        """查看目前正在封禁的用户
+        Args:
+            event(AstrMessageEvent):AstrBot消息事件
+            plat_name(str|None):查看封禁用户的消息平台，默认为None，即插件配置的所有消息平台
+        """
         async with self._sf_lock:
             if plat_name is not None:
                 plat_list = [plat_name]
@@ -405,7 +456,13 @@ class MyPlugin(Star):
     async def sf_clear(
         self, event: AstrMessageEvent, user_id: str, plat_name: str | None = None
     ):
-        """手动清理特定用户的违规记录（默认清理找到的第一个）"""
+        """手动清理特定用户的违规记录（默认清理找到的第一个）
+        Args:
+            event(AstrMessageEvent):AstrBot消息事件
+            user_id(str):需要清空记录的用户id
+            plat_name(str|None):用户所在的消息平台，默认为None，即当前指令所在的消息平台
+            **注意：在id不存在冲突时，无论是否填写plat_name，本插件都可以正确找到用户，如果存在id冲突，不指定消息平台的情况下可能存在条件竞争的bug，请在这种情况下填写消息平台**
+        """
         async with self._sf_lock:
             if plat_name is None:
                 plat_list = self.ban_list["available_platforms"]
@@ -431,9 +488,9 @@ class MyPlugin(Star):
     @sf.command("notify")
     async def sf_notify(self, event: AstrMessageEvent, action: str = "check"):
         """查看或清空待通知的违规消息
-
-        参数:
-            action: 操作类型，"check"查看待通知消息，"clear"清空待通知消息
+        Args:
+            event(AstrMessageEvent):AstrBot消息事件
+            action(str): 操作类型，"check"查看待通知消息，"clear"清空待通知消息
         """
         async with self._sf_lock:
             chain = self.check_user([event.get_platform_name()])
@@ -473,6 +530,12 @@ class MyPlugin(Star):
         await event.send(chain)
 
     def check_list_format(self, ban_list):
+        """检查ban_list的关键key的类型是否符合要求
+        Args:
+            ban_list(dict):插件的ban_list
+        Returns:
+            ban_list(dict):格式化完成后的ban_list
+        """
         legal_list_format = [
             {
                 "name": "available_platforms",
@@ -509,6 +572,10 @@ class MyPlugin(Star):
         return ban_list
 
     def get_ban_list(self):
+        """获取插件持久化文件，同时备份损坏的文件，创建默认文件
+        Returns:
+            banlist(dict):获取到的插件的ban_list
+        """
         data_dir = StarTools.get_data_dir()
         if not data_dir.exists():
             data_dir.mkdir(parents=True)
@@ -562,6 +629,7 @@ class MyPlugin(Star):
         return banlist
 
     def write_ban(self, ban_list):
+        """将插件的ban_list写入持久化文件"""
         data_dir = StarTools.get_data_dir()
         if not data_dir.exists():
             data_dir.mkdir(parents=True)
@@ -585,6 +653,12 @@ class MyPlugin(Star):
             logger.info("[违规通知] 已停止通知重试后台任务")
 
     def create_speak_msg(self, getin: str) -> str:
+        """创建违规消息的字符串
+        Args:
+            getin(str):llm或者fallback的回复消息
+        Returns:
+            str:增加前后缀后的完整回复消息
+        """
         return (
             self.config["speak_config"]["speak_start"]
             + getin
@@ -593,7 +667,11 @@ class MyPlugin(Star):
 
     @filter.on_llm_request()
     async def check_request(self, event: AstrMessageEvent, req: ProviderRequest):
-        """这是一个检查用户输入的函数"""
+        """这是一个检查用户输入的函数
+        Args:
+            event(AstrMessageEvent):AstrBot消息事件
+            req(ProviderRequest):AstrBot事件的llm请求详细信息
+        """
         sender_id = event.get_sender_id()
         msg_str = event.get_message_str()
         sender_plat = event.platform_meta.name

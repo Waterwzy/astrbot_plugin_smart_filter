@@ -1,6 +1,7 @@
 ## astrbot_plugin_smart_filter更新日志
 
 本插件的更新遵循约定式提交
+
 所有更新内容都会集中写在这里
 
 ### Unreleased
