@@ -405,6 +405,8 @@ class MyPlugin(Star):
                         for words in msg_list:
                             prohibit_str += f"{words}\n"
                         prohibit_str += "\n"
+                    if len(self.ban_list["prohibits"][key].items()) == 0:
+                        prohibit_str += "当前平台不存在违规消息\n"
                 chain = MessageChain().message(prohibit_str)
         await event.send(chain)
 
@@ -448,6 +450,8 @@ class MyPlugin(Star):
                     for user, times in self.ban_list["banners"][key].items():
                         except_time = datetime.datetime.fromtimestamp(times)
                         ban_str += f"用户{user},预计解封时间为{except_time.strftime('%Y年%m月%d日 %H:%M:%S')}\n"
+                    if len(self.ban_list["banners"][key].items()) == 0:
+                        ban_str += "当前平台没有正在封禁中的用户\n"
                 chain = MessageChain().message(ban_str)
         await event.send(chain)
 
