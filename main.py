@@ -407,7 +407,7 @@ class MyPlugin(Star):
                         prohibit_str += "\n"
                     if len(self.ban_list["prohibits"][key].items()) == 0:
                         prohibit_str += "当前平台不存在违规消息\n"
-                chain = MessageChain().message(prohibit_str)
+                chain = MessageChain().message(prohibit_str.strip())
         await event.send(chain)
 
     async def unban_all(self):
@@ -452,7 +452,7 @@ class MyPlugin(Star):
                         ban_str += f"用户{user},预计解封时间为{except_time.strftime('%Y年%m月%d日 %H:%M:%S')}\n"
                     if len(self.ban_list["banners"][key].items()) == 0:
                         ban_str += "当前平台没有正在封禁中的用户\n"
-                chain = MessageChain().message(ban_str)
+                chain = MessageChain().message(ban_str.strip())
         await event.send(chain)
 
     @filter.permission_type(filter.PermissionType.ADMIN)
