@@ -15,7 +15,9 @@ from astrbot.api.star import Context, Star, StarTools
 # pyright: reportAttributeAccessIssue=false
 
 
-class MyPlugin(Star):
+class SmartFilter(Star):
+    """Smart_filter主类"""
+
     def __init__(self, context: Context, config: AstrBotConfig):
         """同步初始化行为，主要是为了定义自身的各种属性"""
         super().__init__(context)
