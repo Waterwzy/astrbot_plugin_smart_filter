@@ -3,6 +3,7 @@ import copy
 import json
 import shutil
 import time
+import traceback
 
 from astrbot.api import logger
 
@@ -48,8 +49,12 @@ class SmartFilterFileManager:
                     logger.info(f"已备份损坏文件到: {backup_path}")
                 except Exception:
                     logger.warning("smart_filter数据文件备份失败")
+                    error_msg = traceback.format_exc()
+                    logger.error(error_msg)
             except Exception:
                 logger.error("smart_filter文件读取失败")
+                error_msg = traceback.format_exc()
+                logger.error(error_msg)
         return await self._create_default_file()
 
     def _check_list(self, banlist):
