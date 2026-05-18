@@ -486,7 +486,7 @@ class SmartFilter(Star):
                         await file_manager.write_file(self.ban_list)
                         break
                 if not chain:
-                    send_str = f"未找到用户{user_id}的违规消息，请使用/sf_check来查看当前记录的所有平台的违规消息"
+                    send_str = f"未找到用户{user_id}的违规消息，请使用/sf check来查看当前记录的所有平台的违规消息"
                     chain = MessageChain().message(send_str)
         await event.send(chain)
 
