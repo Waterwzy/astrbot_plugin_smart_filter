@@ -6,6 +6,7 @@
 
 ### Unreleased
 - 修复了错误的指令输出
+- 在check指令显示用户的封禁状态
 
 ### v2.2.3(2026.5.17)
 - 解耦文件读写，使用`core/manager/file_manager.py`全局单实例统一管理文件读写操作。

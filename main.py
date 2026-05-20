@@ -403,7 +403,10 @@ class SmartFilter(Star):
                 for key in plat_list:
                     prohibit_str += f"消息平台{key}:\n"
                     for user, msg_list in self.ban_list["prohibits"][key].items():
-                        prohibit_str += f"用户id：{user} 违规消息数:{len(msg_list)}条\n"
+                        prohibit_str += f"用户id：{user} 违规消息数:{len(msg_list)}条"
+                        if self.ban_list["banners"][key].get(user) is not None:
+                            prohibit_str += "（已封禁）"
+                        prohibit_str += "\n"
                         for words in msg_list:
                             prohibit_str += f"{words}\n"
                         prohibit_str += "\n"
