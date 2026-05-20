@@ -143,5 +143,17 @@
                 "default" : 3
             }
         }
+    },
+    "command_config" : {
+        "description" : "指令相关可选配置",
+        "type" : "object",
+        "items" : {
+            "check_show_ban" : {
+                "description" : "是否在使用check命令时展示已被封禁的用户",
+                "hint" : "如果关闭，check命令展示的所有用户均不处于封禁状态",
+                "type" : "bool",
+                "default" : true
+            }
+        }
     }
 }

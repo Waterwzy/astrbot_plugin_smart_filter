@@ -400,9 +400,16 @@ class SmartFilter(Star):
                 if await self.unban_all():
                     await file_manager.write_file(self.ban_list)
                 prohibit_str = "目前的所有违规历史消息：\n"
+                flag = False
                 for key in plat_list:
                     prohibit_str += f"消息平台{key}:\n"
                     for user, msg_list in self.ban_list["prohibits"][key].items():
+                        if (
+                            self.ban_list["banners"][key].get(user) is not None
+                            and not self.config["command_config"]["check_show_ban"]
+                        ):
+                            continue
+                        flag = True
                         prohibit_str += f"用户id：{user} 违规消息数:{len(msg_list)}条"
                         if self.ban_list["banners"][key].get(user) is not None:
                             prohibit_str += "（已封禁）"
@@ -410,7 +417,7 @@ class SmartFilter(Star):
                         for words in msg_list:
                             prohibit_str += f"{words}\n"
                         prohibit_str += "\n"
-                    if len(self.ban_list["prohibits"][key].items()) == 0:
+                    if not flag:
                         prohibit_str += "当前平台不存在违规消息\n"
                 chain = MessageChain().message(prohibit_str.strip())
         await event.send(chain)
