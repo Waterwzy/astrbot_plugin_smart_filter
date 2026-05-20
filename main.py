@@ -400,8 +400,8 @@ class SmartFilter(Star):
                 if await self.unban_all():
                     await file_manager.write_file(self.ban_list)
                 prohibit_str = "目前的所有违规历史消息：\n"
-                flag = False
                 for key in plat_list:
+                    flag = False
                     prohibit_str += f"消息平台{key}:\n"
                     for user, msg_list in self.ban_list["prohibits"][key].items():
                         if (
