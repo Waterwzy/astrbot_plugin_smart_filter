@@ -46,6 +46,8 @@ class SmartFilter(Star):
             self.ban_list = await file_manager.read_file()
             await self.handle_update()
         # 配置验证
+        if self.config["command_config"]["check_disshow_time"] <= 0:
+            logger.error("配置参数chekc_disshow_time不能小于0")
         if self.config.get("notify_config", {}).get("enable_notify", False):
             if not self.config["notify_config"]["notify_umo"]:
                 logger.warning("[违规通知]已启用违规通知功能，但管理员尚未注册")
