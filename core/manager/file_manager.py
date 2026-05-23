@@ -15,6 +15,10 @@ class SmartFilterFileManager:
         self._fm_lock = asyncio.Lock()
 
     async def initialize(self, file_path):
+        """文件管理器初始化
+        Args:
+            file_path(path):插件的文件存储路径
+        """
         self.data_dir = file_path
         if not self.data_dir.exists():
             self.data_dir.mkdir(parents=True)
@@ -37,6 +41,10 @@ class SmartFilterFileManager:
         return default_list
 
     async def read_file(self):
+        """读取数据文件
+        Returns:
+            banlist(dict):标准化后的核心数据文件
+        """
         async with self._fm_lock:
             try:
                 with open(self.file_path, encoding="utf-8") as f:
@@ -100,6 +108,10 @@ class SmartFilterFileManager:
         return banlist
 
     async def write_file(self, banlist):
+        """写入数据文件
+        Args:
+            banlist(dict):需要写入的核心数据文件
+        """
         async with self._fm_lock:
             try:
                 with open(self.file_path, "w", encoding="utf-8") as f:
