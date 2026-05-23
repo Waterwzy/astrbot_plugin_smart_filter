@@ -29,6 +29,7 @@ class SmartFilterFileManager:
             "banners": {},
             "white_list": {},
             "pending_notifications": [],
+            "data_migrate_tag": [],
         }
         async with self._fm_lock:
             with open(self.file_path, "w", encoding="utf-8") as f:
@@ -81,6 +82,11 @@ class SmartFilterFileManager:
             },
             {
                 "name": "pending_notifications",
+                "type": list,
+                "default": [],
+            },
+            {
+                "name": "data_migrate_tag",
                 "type": list,
                 "default": [],
             },

@@ -153,6 +153,12 @@
                 "hint" : "如果关闭，check命令展示的所有用户均不处于封禁状态",
                 "type" : "bool",
                 "default" : true
+            },
+            "check_disshow_time" : {
+                "description" : "违规消息出现后不在check命令中显示的时间（天）",
+                "hint" : "经过这段时间未处理的违规消息不会在check命令中显示（相关消息不会被删除），可以使用checku命令查看",
+                "type" : "int",
+                "default" : 3
             }
         }
     }
