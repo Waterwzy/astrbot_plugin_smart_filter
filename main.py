@@ -14,6 +14,8 @@ from .core.manager.file_manager import file_manager
 
 # pyright: reportAttributeAccessIssue=false
 
+SECONDS_PER_DAY = 86400
+
 
 class SmartFilter(Star):
     """Smart_filter主类"""
@@ -81,6 +83,9 @@ class SmartFilter(Star):
                                 }
                                 pro_list[i] = new_type
                 self.ban_list["data_migrate_tag"].append("v2.3.0")
+                await file_manager.write_file(self.ban_list)
+            # 数据清洗层
+            if await self.refresh_all_times():
                 await file_manager.write_file(self.ban_list)
 
     async def handle_update(self):
@@ -610,9 +615,29 @@ class SmartFilter(Star):
                     if (
                         words["show"]
                         and pendulum.now().timestamp() - words["time"]
-                        >= self.config["command_config"]["check_disshow_time"] * 86400
+                        >= self.config["command_config"]["check_disshow_time"]
+                        * SECONDS_PER_DAY
                     ):
                         words["show"] = False
+                        flag = True
+        return flag
+
+    async def refresh_all_times(self):
+        """当配置文件改动时，将原本不显示的用户判断修改状态，相反逻辑在unban_all()中实现，这里不重复实现
+        Returns:
+            flag(bool):是否有数据改动
+        """
+        flag = False
+        for key_p, item_plat in self.ban_list["prohibits"].items():
+            for user, item in item_plat.items():
+                for words in item:
+                    if (
+                        not words["show"]
+                        and pendulum.now().timestamp() - words["time"]
+                        <= self.config["command_config"]["check_disshow_time"]
+                        * SECONDS_PER_DAY
+                    ):
+                        words["show"] = True
                         flag = True
         return flag
 
