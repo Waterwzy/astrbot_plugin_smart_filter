@@ -49,7 +49,7 @@ class SmartFilter(Star):
             await self.handle_update()
         # 配置验证
         if self.config["command_config"]["check_disshow_time"] <= 0:
-            logger.error("配置参数chekc_disshow_time不能小于0")
+            logger.error("配置参数check_disshow_time不能小于0")
         if self.config.get("notify_config", {}).get("enable_notify", False):
             if not self.config["notify_config"]["notify_umo"]:
                 logger.warning("[违规通知]已启用违规通知功能，但管理员尚未注册")
@@ -129,7 +129,6 @@ class SmartFilter(Star):
     # 指令定义层
     @filter.command_group("sf")
     def sf(self):
-        self._retry_task
         pass
 
     @filter.permission_type(filter.PermissionType.ADMIN)
@@ -206,7 +205,7 @@ class SmartFilter(Star):
         """按照封禁次数自动封禁一批用户一段时间
         Args:
             event(AstrMessageEvent):AstrBot消息事件
-            cout(int):封禁消息数量阈值
+            count(int):封禁消息数量阈值
             times(str):需要封禁的时间
             plat_name(str|None):封禁的消息平台，默认为None，即当前指令所在的消息平台
         """
