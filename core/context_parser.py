@@ -39,6 +39,14 @@ class ContextParser:
             end_place -= 1
         self.context = self.context[end_place + 1 : len(self.context)]
 
+    def _remove_astrbot_system_reminder(
+        self, ori_str: str
+    ) -> str:  # 去除astrbot的系统提示<system_reminder>
+        if ori_str.find("<system_reminder>") != -1:
+            return ori_str[: ori_str.find("<system_reminder>")]
+        else:
+            return ori_str
+
     def parse_context(self, role_lenth: int) -> str:
         """将最近的几轮对话整理成可读的字符串形式
         Args:
@@ -52,18 +60,19 @@ class ContextParser:
         for i, context_obj in enumerate(self.context):
             for j, son_obj in enumerate(context_obj["content"]):
                 text = ""
-                if son_obj["type"] == "image_url":
-                    text = "[图片]"
-                elif son_obj["type"] == "input_audio":
-                    text = "[语音]"
-                elif son_obj["type"] == "file":
-                    text = "[文件]"
-                elif son_obj.get("text"):
-                    text = son_obj["text"]
-                    if text.find("<system_reminder>") != -1:
-                        text = text[
-                            : text.find("<system_reminder>")
-                        ]  # 去除astrbot的系统提示
+                if isinstance(son_obj, dict):
+                    if son_obj["type"] == "image_url":
+                        text = "[图片]"
+                    elif son_obj["type"] == "input_audio":
+                        text = "[语音]"
+                    elif son_obj["type"] == "file":
+                        text = "[文件]"
+                    elif son_obj.get("text"):
+                        text = son_obj["text"]
+                        text = self._remove_astrbot_system_reminder(text)
+                else:
+                    text = son_obj
+                    text = self._remove_astrbot_system_reminder(text)
                 if (
                     j == 0
                     and self.context[i]["role"] == "user"
