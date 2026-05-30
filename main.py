@@ -1,4 +1,5 @@
 import asyncio
+import copy
 import datetime
 import time
 import traceback
@@ -10,6 +11,7 @@ from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star, StarTools
 
+from .core.context_parser import ContextParser
 from .core.manager.file_manager import file_manager
 
 # pyright: reportAttributeAccessIssue=false
@@ -49,7 +51,9 @@ class SmartFilter(Star):
             await self.handle_update()
         # 配置验证
         if self.config["command_config"]["check_disshow_time"] <= 0:
-            logger.error("配置参数check_disshow_time不能小于0")
+            logger.error("配置参数check_disshow_time不能小于或等于0")
+        if self.config["filter_config"]["filter_roles"] < 0:
+            logger.error("配置参数filter_roles不能小于0")
         if self.config.get("notify_config", {}).get("enable_notify", False):
             if not self.config["notify_config"]["notify_umo"]:
                 logger.warning("[违规通知]已启用违规通知功能，但管理员尚未注册")
@@ -728,9 +732,13 @@ class SmartFilter(Star):
                 self.config["filter_config"]["filter_prompt"]
             )
         ).system_prompt
+        context_str = ContextParser(copy.deepcopy(req.contexts)).parse_context(
+            self.config["filter_config"]["filter_roles"]
+        )
+        logger.debug(f"解析结果：\n{context_str}")
         msg = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"user input:{msg_str}"},
+            {"role": "user", "content": f"{context_str}\n最近一轮用户输入:{msg_str}"},
         ]
         # logger.warning(f"获取personl类：{system_prompt}")
         try:

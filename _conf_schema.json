@@ -27,6 +27,11 @@
                 "type" : "string",
                 "default" : "block"
             },
+            "filter_roles" : {
+                "description" : "多轮审核的对话轮数",
+                "hint" : "一个用户消息和回复称为一轮，有助于审核模型了解上下文提升审核准确性，但是数值过大可能导致额外tokens消耗，不希望开启这个功能可设置为0",
+                "type" : "int"
+            },
             "filter_group" : {
                 "description" : "是否对群聊消息开启审核",
                 "hint" : "关闭后，群聊消息不会经过审核，根据自身需求进行配置",
