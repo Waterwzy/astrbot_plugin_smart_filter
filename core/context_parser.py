@@ -4,7 +4,7 @@ from dataclasses import dataclass
 @dataclass
 class ContextParser:
     """SmartFilter上下文解析类
-    未发版，用于上下文的截断和规范化
+    2.4.0加入，用于上下文的截断和规范化
     """
 
     context: list[dict]
