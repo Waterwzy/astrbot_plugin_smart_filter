@@ -1,5 +1,14 @@
 # 用户输入审核管理插件
 
+<p align="center">
+  <a href="https://github.com/Waterwzy/astrbot_plugin_smart_filter/releases"><img src="https://img.shields.io/github/v/release/Waterwzy/astrbot_plugin_smart_filter?color=76bad9" alt="Release"></a>
+  <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/badge/python-3.10+-blue.svg" alt="Python 3.10+"></a>
+  <a href="https://github.com/Waterwzy/astrbot_plugin_smart_filter/stargazers"><img src="https://img.shields.io/github/stars/Waterwzy/astrbot_plugin_smart_filter?style=social" alt="Stars"></a>
+  <a href="https://github.com/Waterwzy/astrbot_plugin_smart_filter/blob/master/LICENSE"><img src="https://img.shields.io/badge/license-AGPL--3.0-red" alt="Лицензия AGPLv3"></a>
+</p>
+
+---
+
 一个低侵入式，便于管理的 AstrBot 用户输入审核插件。
 
 > [!TIP]
