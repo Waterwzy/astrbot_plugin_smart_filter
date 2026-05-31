@@ -456,6 +456,11 @@ class SmartFilter(Star):
             if len(msg_content) > 200:
                 msg_content = msg_content[:200] + "..."
 
+            if len(violation_info["context_str"]) > 200:
+                violation_info["context_str"] = (
+                    violation_info["context_str"][:200] + "..."
+                )
+
             notify_msg = "【违规消息通知】\n"
             notify_msg += "━━━━━━━━━━━━━━━━\n"
             notify_msg += f"⏰ 时间：{time_str}\n"
@@ -463,6 +468,8 @@ class SmartFilter(Star):
             notify_msg += f"👤 用户：{violation_info['user_id']}\n"
             notify_msg += f"💬 消息：{msg_content}\n"
             notify_msg += f"📊 总计次数：{violation_info['counts']}\n"
+            if self.config["filter_config"]["filter_roles"]:
+                notify_msg += f"📫上下文：{violation_info['context_str']}\n"
 
             notify_msg += "━━━━━━━━━━━━━━━━\n"
             notify_msg += f"💡 使用 /sf checku {violation_info['user_id']} {violation_info['platform']} 查看详情"
@@ -786,6 +793,7 @@ class SmartFilter(Star):
                 "user_id": sender_id,
                 "message": msg_str,
                 "counts": len(self.ban_list["prohibits"][sender_plat][sender_id]),
+                "context_str": context_str,
                 "retry_count": 0,
             }
 
