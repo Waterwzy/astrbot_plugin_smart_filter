@@ -13,6 +13,8 @@ class SmartFilterFileManager:
         self.data_dir = None
         self.file_path = None
         self._fm_lock = asyncio.Lock()
+        self._last_write_time = 0
+        self._UPDATE_SECONDS = 5
 
     async def initialize(self, file_path):
         """文件管理器初始化
@@ -107,18 +109,21 @@ class SmartFilterFileManager:
                 banlist[std_item["name"]] = copy.deepcopy(std_item["default"])
         return banlist
 
-    async def write_file(self, banlist):
+    async def write_file(self, banlist, force: bool = False):
         """写入数据文件
         Args:
             banlist(dict):需要写入的核心数据文件
+            force(bool):是否忽略文件读写缓冲时间强制落盘
         """
         async with self._fm_lock:
-            try:
-                with open(self.file_path, "w", encoding="utf-8") as f:
-                    json.dump(banlist, f, ensure_ascii=False, indent=4)
-            except Exception as e:
-                logger.error(e)
-                raise e
+            if time.time() - self._last_write_time >= self._UPDATE_SECONDS or force:
+                try:
+                    with open(self.file_path, "w", encoding="utf-8") as f:
+                        json.dump(banlist, f, ensure_ascii=False, indent=4)
+                    self._last_write_time = time.time()
+                except Exception as e:
+                    logger.error(e)
+                    raise e
 
 
 file_manager = SmartFilterFileManager()

@@ -674,6 +674,7 @@ class SmartFilter(Star):
             except asyncio.CancelledError:
                 pass
             logger.info("[违规通知] 已停止通知重试后台任务")
+        await file_manager.write_file(self.ban_list, force=True)
 
     # 主钩子入口，检查用户输入
     @filter.on_llm_request()
