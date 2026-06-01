@@ -310,7 +310,7 @@ class SmartFilter(Star):
             if chain is None:
                 if self.ban_list["prohibits"][plat_list[0]].get(user_id) is None:
                     chain = MessageChain().message(
-                        f"用户{user_id}不存在，请检查消息平台是否正确"
+                        f"未找到用户{user_id}的违规记录，有可能是相应消息平台不存在该用户或用户不存在记录中的违规消息。"
                     )
                 else:
                     prohibit_str = (
