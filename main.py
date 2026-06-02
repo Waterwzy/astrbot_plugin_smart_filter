@@ -746,7 +746,10 @@ class SmartFilter(Star):
         logger.debug(f"解析结果：\n{context_str}")
         msg = [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"部分对话历史：\n{context_str}\n最近一轮用户输入:{msg_str}"},
+            {
+                "role": "user",
+                "content": f"部分对话历史：\n{context_str}\n最近一轮用户输入:{msg_str}",
+            },
         ]
         # logger.warning(f"获取personl类：{system_prompt}")
         try:
