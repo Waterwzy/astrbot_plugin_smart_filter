@@ -295,6 +295,8 @@
 
 本插件的诞生离不开以下帮助：
 
+- [AstrBot](https://github.com/AstrBotDevs/AstrBot) 本插件所依赖的框架，拥有强大的agent能力和丰富的开源生态
+
 - [@HeartEase1](https://github.com/HeartEase1) 为本插件增加了部分核心功能，改进了部分代码质量。
 
 以上大概就是本插件的所有功能，如果你觉得这个插件好用的话欢迎点个star。
