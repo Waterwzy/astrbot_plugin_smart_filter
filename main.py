@@ -744,11 +744,17 @@ class SmartFilter(Star):
             self.config["filter_config"]["filter_roles"]
         )
         logger.debug(f"解析结果：\n{context_str}")
+        if self.config["filter_config"]["filter_roles"] != 0:
+            filter_content = (
+                f"用户之前的输入内容：\n{context_str}\n最近一轮用户输入:{msg_str}"
+            )
+        else:
+            filter_content = f"最近一轮用户输入:{msg_str}"
         msg = [
             {"role": "system", "content": system_prompt},
             {
                 "role": "user",
-                "content": f"部分对话历史：\n{context_str}\n最近一轮用户输入:{msg_str}",
+                "content": filter_content,
             },
         ]
         # logger.warning(f"获取personl类：{system_prompt}")
