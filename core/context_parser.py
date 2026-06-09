@@ -53,5 +53,5 @@ class ContextParser:
                     elif son_obj.get("text"):
                         text += son_obj["text"]
                         text = self._remove_astrbot_system_reminder(text)
-            parsed_str += f"\n[Round{i+1}]{text}"
+            parsed_str += f"\n[Round{i + 1}]{text}"
         return parsed_str.strip()
