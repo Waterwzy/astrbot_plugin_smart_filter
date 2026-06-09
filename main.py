@@ -740,6 +740,7 @@ class SmartFilter(Star):
                 self.config["filter_config"]["filter_prompt"]
             )
         ).system_prompt
+        # logger.debug(f"原始请求体：{req.contexts}")
         context_str = ContextParser(copy.deepcopy(req.contexts)).parse_context(
             self.config["filter_config"]["filter_roles"]
         )
