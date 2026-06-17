@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>违规消息管理</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>违规消息管理</h1>
+
+        <div class="ban-controls">
+            <h2>封禁设置</h2>
+            <div class="duration-inputs">
+                <div class="input-group">
+                    <label for="years">年</label>
+                    <input type="number" id="years" min="0" value="0">
+                </div>
+                <div class="input-group">
+                    <label for="months">月</label>
+                    <input type="number" id="months" min="0" value="0">
+                </div>
+                <div class="input-group">
+                    <label for="days">天</label>
+                    <input type="number" id="days" min="0" value="0">
+                </div>
+                <div class="input-group">
+                    <label for="hours">小时</label>
+                    <input type="number" id="hours" min="0" value="0">
+                </div>
+            </div>
+            <div class="button-group">
+                <button id="banBtn" class="btn btn-primary">确认封禁</button>
+                <button id="refreshBtn" class="btn btn-secondary">刷新</button>
+            </div>
+        </div>
+
+        <div id="message" class="message"></div>
+
+        <div class="violations-table-container">
+            <table id="violationsTable">
+                <thead>
+                    <tr>
+                        <th class="checkbox-column"><input type="checkbox" id="selectAll"></th>
+                        <th class="user-column">用户ID（平台）</th>
+                        <th class="message-column">违规消息</th>
+                        <th class="time-column">时间</th>
+                        <th class="action-column">操作</th>
+                        <th class="unban-column">解封</th>
+                    </tr>
+                </thead>
+                <tbody id="violationsBody">
+                    <tr>
+                        <td colspan="6" class="loading">加载中...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+    </div>
+
+    <script type="module" src="./app.js"></script>
+</body>
+</html>

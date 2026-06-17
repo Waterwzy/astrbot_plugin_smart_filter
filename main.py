@@ -10,8 +10,10 @@ from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star, StarTools
+from astrbot.api.web import request
 
 from .core.context_parser import ContextParser
+from .core.manager.api_manager import api_manager
 from .core.manager.file_manager import file_manager
 
 # pyright: reportAttributeAccessIssue=false
@@ -43,12 +45,39 @@ class SmartFilter(Star):
         self._admin_umo: str = ""
         """管理员的 unified_msg_origin，用于主动发送通知"""
 
+        # Register Web API for violations page
+        self.context.register_web_api(
+            "/astrbot_plugin_smart_filter/violations/list",
+            self.api_get_violations,
+            ["GET"],
+            "Get violations list",
+        )
+        self.context.register_web_api(
+            "/astrbot_plugin_smart_filter/violations/ban",
+            self.api_ban_users,
+            ["POST"],
+            "Ban selected users",
+        )
+        self.context.register_web_api(
+            "/astrbot_plugin_smart_filter/violations/clear",
+            self.api_clear_violations,
+            ["POST"],
+            "Clear user violations",
+        )
+        self.context.register_web_api(
+            "/astrbot_plugin_smart_filter/violations/unban",
+            self.api_unban_users,
+            ["POST"],
+            "Unban selected users",
+        )
+
     async def initialize(self):
         """异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
         async with self._sf_lock:
             await file_manager.initialize(StarTools.get_data_dir())
             self.ban_list = await file_manager.read_file()
             await self.handle_update()
+        api_manager.initialize(self)
         # 配置验证
         if self.config["command_config"]["check_disshow_time"] <= 0:
             logger.error("配置参数check_disshow_time不能小于或等于0")
@@ -854,3 +883,57 @@ class SmartFilter(Star):
             chain = MessageChain().message(f"[DEBUG]raw content:{filter_reasoning_res}")
             await event.send(chain)
         event.stop_event()
+
+    # Web API handlers for violations page
+    async def api_get_violations(self):
+        """Get all violations grouped by platform and user.
+
+        Returns:
+            JSON response with violations list.
+        """
+        return await api_manager.get_violations()
+
+    async def api_ban_users(self):
+        """Ban selected users for a specified duration.
+
+        Request body:
+            {
+                "users": [{"platform": str, "user_id": str}],
+                "duration": {"years": int, "months": int, "days": int, "hours": int}
+            }
+
+        Returns:
+            JSON response with ban results.
+        """
+        payload = await request.json(default={})
+        return await api_manager.ban_users(
+            payload.get("users", []), payload.get("duration", {})
+        )
+
+    async def api_clear_violations(self):
+        """Clear violations for specified users.
+
+        Request body:
+            {
+                "users": [{"platform": str, "user_id": str}]
+            }
+
+        Returns:
+            JSON response with clear results.
+        """
+        payload = await request.json(default={})
+        return await api_manager.clear_violations(payload.get("users", []))
+
+    async def api_unban_users(self):
+        """Unban specified users.
+
+        Request body:
+            {
+                "users": [{"platform": str, "user_id": str}]
+            }
+
+        Returns:
+            JSON response with unban results.
+        """
+        payload = await request.json(default={})
+        return await api_manager.unban_users(payload.get("users", []))
