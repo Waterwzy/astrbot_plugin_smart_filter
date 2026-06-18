@@ -5,6 +5,8 @@
 所有更新内容都会集中写在这里
 
 ### Unreleased
+
+### v2.5.1(2026.6.18)
 - 解耦指令部分到`core.manager.command_manager`便于管理。
 - 增加显示Pages配置项，适应不同版本的astrbot。
 
