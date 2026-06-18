@@ -164,6 +164,11 @@
                 "hint" : "经过这段时间未处理的违规消息不会在check命令中显示（相关消息不会被删除），可以使用checku命令查看（请设置为大于0的整数否则插件会报错）",
                 "type" : "int",
                 "default" : 3
+            },
+            "open_pages" : {
+                "description": "是否打开smart_filter Pages",
+                "hint": "由于4.26的大规模更新，本插件的Pages在4.26之前的astrbot版本均不能使用；如果没有更新的计划不要打开此配置项。**注意：修改本配置项后可能需要重启AstrBot才能生效；生效后Pages页面不可用（会显示错误，但是仍有对应页面）**",
+                "type": "bool"
             }
         }
     }

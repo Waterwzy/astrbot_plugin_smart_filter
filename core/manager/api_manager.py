@@ -191,7 +191,6 @@ class SmartFilterAPIManager:
         """
         if not users:
             return error_response("No users selected", status_code=400)
-
         results = []
         async with self._plugin._sf_lock:
             for user in users:

@@ -10,10 +10,8 @@ from astrbot.api import AstrBotConfig, logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star, StarTools
-from astrbot.api.web import request
 
 from .core.context_parser import ContextParser
-from .core.manager.api_manager import api_manager
 from .core.manager.command_manager import command_manager
 from .core.manager.file_manager import file_manager
 
@@ -47,30 +45,34 @@ class SmartFilter(Star):
         """管理员的 unified_msg_origin，用于主动发送通知"""
 
         # Register Web API for violations page
-        self.context.register_web_api(
-            "/astrbot_plugin_smart_filter/violations/list",
-            self.api_get_violations,
-            ["GET"],
-            "Get violations list",
-        )
-        self.context.register_web_api(
-            "/astrbot_plugin_smart_filter/violations/ban",
-            self.api_ban_users,
-            ["POST"],
-            "Ban selected users",
-        )
-        self.context.register_web_api(
-            "/astrbot_plugin_smart_filter/violations/clear",
-            self.api_clear_violations,
-            ["POST"],
-            "Clear user violations",
-        )
-        self.context.register_web_api(
-            "/astrbot_plugin_smart_filter/violations/unban",
-            self.api_unban_users,
-            ["POST"],
-            "Unban selected users",
-        )
+        if self.config["command_config"]["open_pages"]:
+            from astrbot.api.web import request  # noqa: I001,F401
+            from .core.manager.api_manager import api_manager  # noqa: I001,F401
+
+            self.context.register_web_api(
+                "/astrbot_plugin_smart_filter/violations/list",
+                self.api_get_violations,
+                ["GET"],
+                "Get violations list",
+            )
+            self.context.register_web_api(
+                "/astrbot_plugin_smart_filter/violations/ban",
+                self.api_ban_users,
+                ["POST"],
+                "Ban selected users",
+            )
+            self.context.register_web_api(
+                "/astrbot_plugin_smart_filter/violations/clear",
+                self.api_clear_violations,
+                ["POST"],
+                "Clear user violations",
+            )
+            self.context.register_web_api(
+                "/astrbot_plugin_smart_filter/violations/unban",
+                self.api_unban_users,
+                ["POST"],
+                "Unban selected users",
+            )
 
     async def initialize(self):
         """异步的插件初始化方法，当实例化该插件类之后会自动调用该方法。"""
@@ -78,7 +80,11 @@ class SmartFilter(Star):
             await file_manager.initialize(StarTools.get_data_dir())
             self.ban_list = await file_manager.read_file()
             await self.handle_update()
-        api_manager.initialize(self)
+        if self.config["command_config"]["open_pages"]:
+            from .core.manager.api_manager import api_manager  # noqa: I001,F401
+
+            self._api_manager = api_manager
+            self._api_manager.initialize(self)  # noqa: F821
         command_manager.initialize(self)
         # 配置验证
         if self.config["command_config"]["check_disshow_time"] <= 0:
@@ -704,7 +710,7 @@ class SmartFilter(Star):
         Returns:
             JSON response with violations list.
         """
-        return await api_manager.get_violations()
+        return await self._api_manager.get_violations()  # noqa: F821
 
     async def api_ban_users(self):
         """Ban selected users for a specified duration.
@@ -718,8 +724,10 @@ class SmartFilter(Star):
         Returns:
             JSON response with ban results.
         """
+        from astrbot.api.web import request
+
         payload = await request.json(default={})
-        return await api_manager.ban_users(
+        return await self._api_manager.ban_users(
             payload.get("users", []), payload.get("duration", {})
         )
 
@@ -734,8 +742,10 @@ class SmartFilter(Star):
         Returns:
             JSON response with clear results.
         """
+        from astrbot.api.web import request
+
         payload = await request.json(default={})
-        return await api_manager.clear_violations(payload.get("users", []))
+        return await self._api_manager.clear_violations(payload.get("users", []))
 
     async def api_unban_users(self):
         """Unban specified users.
@@ -748,5 +758,7 @@ class SmartFilter(Star):
         Returns:
             JSON response with unban results.
         """
+        from astrbot.api.web import request
+
         payload = await request.json(default={})
-        return await api_manager.unban_users(payload.get("users", []))
+        return await self._api_manager.unban_users(payload.get("users", []))
