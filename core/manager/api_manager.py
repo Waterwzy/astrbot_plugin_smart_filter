@@ -22,7 +22,6 @@ class SmartFilterAPIManager:
 
     def initialize(self, plugin):
         """Initialize the API manager with a reference to the plugin instance.
-
         Args:
             plugin: The SmartFilter plugin instance.
         """
@@ -30,7 +29,6 @@ class SmartFilterAPIManager:
 
     async def get_violations(self):
         """Get all violations grouped by platform and user.
-
         Returns:
             JSON response with violations list.
         """
@@ -53,11 +51,9 @@ class SmartFilterAPIManager:
 
     async def ban_users(self, users: list, duration: dict):
         """Ban selected users for a specified duration.
-
         Args:
             users: List of users to ban, each with platform and user_id.
             duration: Duration dict with years, months, days, hours.
-
         Returns:
             JSON response with ban results.
         """
@@ -125,10 +121,8 @@ class SmartFilterAPIManager:
 
     async def clear_violations(self, users: list):
         """Clear violations for specified users.
-
         Args:
             users: List of users to clear, each with platform and user_id.
-
         Returns:
             JSON response with clear results.
         """
@@ -190,10 +184,8 @@ class SmartFilterAPIManager:
 
     async def unban_users(self, users: list):
         """Unban specified users.
-
         Args:
             users: List of users to unban, each with platform and user_id.
-
         Returns:
             JSON response with unban results.
         """

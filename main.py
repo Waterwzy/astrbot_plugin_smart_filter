@@ -14,6 +14,7 @@ from astrbot.api.web import request
 
 from .core.context_parser import ContextParser
 from .core.manager.api_manager import api_manager
+from .core.manager.command_manager import command_manager
 from .core.manager.file_manager import file_manager
 
 # pyright: reportAttributeAccessIssue=false
@@ -78,6 +79,7 @@ class SmartFilter(Star):
             self.ban_list = await file_manager.read_file()
             await self.handle_update()
         api_manager.initialize(self)
+        command_manager.initialize(self)
         # 配置验证
         if self.config["command_config"]["check_disshow_time"] <= 0:
             logger.error("配置参数check_disshow_time不能小于或等于0")
@@ -180,23 +182,7 @@ class SmartFilter(Star):
             times(str):需要封禁的时间
             plat_name(str|None):封禁的消息平台，默认为None，即当前指令所在的消息平台
         """
-        async with self._sf_lock:
-            if plat_name is None:
-                plat_name = event.platform_meta.name
-            chain = self.check_user([plat_name], times)
-
-            if chain is None:
-                ban_time = pendulum.parse(times)
-                state, detail = await self.ban_user(user_id, plat_name, ban_time)  # type:ignore
-                if state == "Success":
-                    chain = MessageChain().message(
-                        f"用户{user_id}封禁成功，预计解封时间{detail}"
-                    )
-                else:
-                    chain = MessageChain().message(f"{detail}")
-
-                await file_manager.write_file(self.ban_list)
-        await event.send(chain)
+        await command_manager.ban(event, user_id, times, plat_name)
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("unban")
@@ -209,22 +195,7 @@ class SmartFilter(Star):
             user_id(str):需要解封禁的用户id
             plat_name(str|None):解封禁的消息平台，默认为None，即当前指令所在的消息平台
         """
-        async with self._sf_lock:
-            if plat_name is None:
-                plat_name = event.platform_meta.name
-
-            chain = self.check_user([plat_name])
-            if chain is None:
-                if user_id not in self.ban_list["banners"][plat_name]:
-                    chain = MessageChain().message("该用户不在封禁列表中，请核实后重试")
-                else:
-                    self.ban_list["banners"][plat_name].pop(user_id)
-                    if user_id in self.ban_list["prohibits"][plat_name]:
-                        self.ban_list["prohibits"][plat_name].pop(user_id)
-                    await file_manager.write_file(self.ban_list)
-
-                    chain = MessageChain().message("解封操作成功！")
-        await event.send(chain)
+        await command_manager.unban(event, user_id, plat_name)
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("bancount")
@@ -242,32 +213,7 @@ class SmartFilter(Star):
             times(str):需要封禁的时间
             plat_name(str|None):封禁的消息平台，默认为None，即当前指令所在的消息平台
         """
-        async with self._sf_lock:
-            if plat_name is not None:
-                plat_list = [plat_name]
-            else:
-                plat_list = self.ban_list["available_platforms"]
-
-            chain = self.check_user(plat_list, times)
-
-            if chain is None:
-                if await self.unban_all():
-                    await file_manager.write_file(self.ban_list)
-                ban_time = pendulum.parse(times)
-                res_str = "封禁结果返回：\n"
-                for plat in plat_list:
-                    res_str += f"平台{plat}:\n"
-                    for key, user in self.ban_list["prohibits"][plat].items():
-                        if len(user) >= count:
-                            res, detail = await self.ban_user(key, plat, ban_time)  # type:ignore
-                            res_str += f"用户{key}:"
-                            if res == "Success":
-                                res_str += f"封禁成功，预计解封时间{detail}\n"
-                            else:
-                                res_str += f"{detail}\n"
-                await file_manager.write_file(self.ban_list)
-                chain = MessageChain().message(res_str)
-        await event.send(chain)
+        await command_manager.bancount(event, count, times, plat_name)
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("check")
@@ -277,45 +223,7 @@ class SmartFilter(Star):
             event(AstrMessageEvent):AstrBot消息事件
             plat_name(str|None):需要查看的消息平台，默认为None，即插件配置的所有消息平台
         """
-        async with self._sf_lock:
-            if plat_name is None:
-                plat_list = self.config["platform_config"]["available_platforms"]
-            else:
-                plat_list = [plat_name]
-
-            chain = self.check_user(plat_list)
-
-            if chain is None:
-                if await self.unban_all():
-                    await file_manager.write_file(self.ban_list)
-                prohibit_str = "最近的违规历史消息：\n"
-                for key in plat_list:
-                    flag = False
-                    prohibit_str += f"消息平台{key}:\n"
-                    for user, msg_list in self.ban_list["prohibits"][key].items():
-                        if (
-                            self.ban_list["banners"][key].get(user) is not None
-                            and not self.config["command_config"]["check_show_ban"]
-                        ):
-                            continue
-                        flag = True
-                        prohibit_str += f"用户id：{user} 违规消息数:{len(msg_list)}条"
-                        if self.ban_list["banners"][key].get(user) is not None:
-                            prohibit_str += "（已封禁）"
-                        prohibit_str += "\n"
-                        show_flag = False
-                        for words in msg_list:
-                            if words["show"]:
-                                prohibit_str += f"{words['word']}\n"
-                                show_flag = True
-                        if not show_flag:
-                            prohibit_str += "(当前所有违规消息已被折叠)"
-                        prohibit_str += "\n"
-                    if not flag:
-                        prohibit_str += "当前平台不存在违规消息\n"
-                prohibit_str += "💡部分消息可能被折叠，通过'/sf checku 用户ID 消息平台'以查看特定用户的详细信息"
-                chain = MessageChain().message(prohibit_str.strip())
-        await event.send(chain)
+        await command_manager.check(event, plat_name)
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("checku")
@@ -328,27 +236,7 @@ class SmartFilter(Star):
             user_id(str):用户ID
             plat_name(str|None):查看封禁用户的消息平台，默认为None，即当前指令所在的消息平台
         """
-        async with self._sf_lock:
-            if plat_name is not None:
-                plat_list = [plat_name]
-            else:
-                plat_list = [event.get_platform_name()]
-
-            chain = self.check_user(plat_list)
-
-            if chain is None:
-                if self.ban_list["prohibits"][plat_list[0]].get(user_id) is None:
-                    chain = MessageChain().message(
-                        f"未找到用户{user_id}的违规记录，有可能是相应消息平台不存在该用户或用户不存在记录中的违规消息。"
-                    )
-                else:
-                    prohibit_str = (
-                        f"用户{user_id}的违规消息记录（在消息平台{plat_list[0]}）：\n"
-                    )
-                    for word in self.ban_list["prohibits"][plat_list[0]][user_id]:
-                        prohibit_str += f"{word['word']}\n"
-                    chain = MessageChain().message(prohibit_str.strip())
-        await event.send(chain)
+        await command_manager.checku(event, user_id, plat_name)
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("checkban")
@@ -358,28 +246,7 @@ class SmartFilter(Star):
             event(AstrMessageEvent):AstrBot消息事件
             plat_name(str|None):查看封禁用户的消息平台，默认为None，即插件配置的所有消息平台
         """
-        async with self._sf_lock:
-            if plat_name is not None:
-                plat_list = [plat_name]
-            else:
-                plat_list = self.ban_list["available_platforms"]
-
-            chain = self.check_user(plat_list)
-
-            if chain is None:
-                if await self.unban_all():
-                    await file_manager.write_file(self.ban_list)
-
-                ban_str = "目前封禁中的用户：\n"
-                for key in plat_list:
-                    ban_str += f"消息平台：{key}\n"
-                    for user, times in self.ban_list["banners"][key].items():
-                        except_time = datetime.datetime.fromtimestamp(times)
-                        ban_str += f"用户{user},预计解封时间为{except_time.strftime('%Y年%m月%d日 %H:%M:%S')}\n"
-                    if len(self.ban_list["banners"][key].items()) == 0:
-                        ban_str += "当前平台没有正在封禁中的用户\n"
-                chain = MessageChain().message(ban_str.strip())
-        await event.send(chain)
+        await command_manager.checkban(event, plat_name)
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("clear")
@@ -393,26 +260,7 @@ class SmartFilter(Star):
             plat_name(str|None):用户所在的消息平台，默认为None，即当前指令所在的消息平台
             **注意：在id不存在冲突时，无论是否填写plat_name，本插件都可以正确找到用户，如果存在id冲突，不指定消息平台的情况下可能存在条件竞争的bug，请在这种情况下填写消息平台**
         """
-        async with self._sf_lock:
-            if plat_name is None:
-                plat_list = self.ban_list["available_platforms"]
-            else:
-                plat_list = [plat_name]
-
-            chain = self.check_user(plat_list)
-
-            if chain is None:
-                for plat in plat_list:
-                    if user_id in self.ban_list["prohibits"][plat]:
-                        send_str = f"用户{user_id}的违规消息将会被清除"
-                        self.ban_list["prohibits"][plat].pop(user_id)
-                        chain = MessageChain().message(send_str)
-                        await file_manager.write_file(self.ban_list)
-                        break
-                if not chain:
-                    send_str = f"未找到用户{user_id}的违规消息，请使用/sf check来查看当前记录的所有平台的违规消息"
-                    chain = MessageChain().message(send_str)
-        await event.send(chain)
+        await command_manager.clear(event, user_id, plat_name)
 
     @filter.permission_type(filter.PermissionType.ADMIN)
     @sf.command("notify")
@@ -422,42 +270,7 @@ class SmartFilter(Star):
             event(AstrMessageEvent):AstrBot消息事件
             action(str): 操作类型，"check"查看待通知消息，"clear"清空待通知消息
         """
-        async with self._sf_lock:
-            chain = self.check_user([event.get_platform_name()])
-
-            if chain is None:
-                if action == "check":
-                    if not self.ban_list["pending_notifications"]:
-                        chain = MessageChain().message("当前没有待通知的违规消息")
-                    else:
-                        notify_str = f"待通知的违规消息（共{len(self.ban_list['pending_notifications'])}条）：\n\n"
-                        for idx, item in enumerate(
-                            self.ban_list["pending_notifications"], 1
-                        ):
-                            time_str = datetime.datetime.fromtimestamp(
-                                item["timestamp"]
-                            ).strftime("%Y-%m-%d %H:%M:%S")
-                            notify_str += f"[{idx}] {time_str}\n"
-                            notify_str += (
-                                f"平台：{item['platform']} | 用户：{item['user_id']}\n"
-                            )
-                            notify_str += f"消息：{item['message']}\n"
-                            if item.get("reasoning"):
-                                notify_str += f"审核理由：{item['reasoning']}\n"
-                            notify_str += "\n"
-                        notify_str += "使用 /sf notify clear 清空所有待通知消息"
-                        chain = MessageChain().message(notify_str)
-                elif action == "clear":
-                    count = len(self.ban_list["pending_notifications"])
-                    self.ban_list["pending_notifications"] = []
-                    await file_manager.write_file(self.ban_list)
-                    chain = MessageChain().message(f"已清空 {count} 条待通知的违规消息")
-                else:
-                    chain = MessageChain().message(
-                        "无效的操作类型，请使用 'check' 或 'clear'"
-                    )
-
-        await event.send(chain)
+        await command_manager.notify(event, action)
 
     # 违规消息主动通知相关模块
     async def send_notify_to_admin(self, violation_info: dict) -> bool:

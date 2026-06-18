@@ -5,6 +5,7 @@
 所有更新内容都会集中写在这里
 
 ### Unreleased
+- 解耦指令部分到`core.manager.command_manager`便于管理。
 
 ### v2.5.0(2026.6.17)
 - 增加Pages页面，支持通过AstrBotWebUI查看，清除违规消息，批量封禁用户，解封用户等。
