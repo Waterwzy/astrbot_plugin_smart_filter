@@ -5,6 +5,7 @@
 所有更新内容都会集中写在这里
 
 ### Unreleased
+- 将Pages显示的列表更改为按最远时间倒序排列，增加友好性。
 
 ### v2.5.1(2026.6.18)
 - 解耦指令部分到`core.manager.command_manager`便于管理。

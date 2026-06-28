@@ -47,7 +47,7 @@ class SmartFilterAPIManager:
                                 in self._plugin.ban_list["banners"].get(platform, {}),
                             }
                         )
-            return json_response(violations)
+            return json_response(violations[::-1])
 
     async def ban_users(self, users: list, duration: dict):
         """Ban selected users for a specified duration.
