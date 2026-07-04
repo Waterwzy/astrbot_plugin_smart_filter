@@ -1,3 +1,5 @@
+from operator import itemgetter
+
 import pendulum
 
 from astrbot.api.web import error_response, json_response
@@ -45,9 +47,12 @@ class SmartFilterAPIManager:
                                 "time": msg["time"],
                                 "is_banned": user_id
                                 in self._plugin.ban_list["banners"].get(platform, {}),
+                                "last_time": messages[-1]["time"],
                             }
                         )
-            return json_response(violations[::-1])
+            return json_response(
+                sorted(violations, key=itemgetter("last_time"), reverse=True)
+            )
 
     async def ban_users(self, users: list, duration: dict):
         """Ban selected users for a specified duration.
