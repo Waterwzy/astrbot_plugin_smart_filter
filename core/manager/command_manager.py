@@ -9,7 +9,7 @@ from .file_manager import file_manager
 
 class SmartFilterCommandFilter:
     """SmartFilter指令处理器
-    未发布，统一处理插件指令，main.py仅负责注册指令并且转发
+    2.5.1加入，统一处理插件指令，main.py仅负责注册指令并且转发
     全局单实例
     """
 
@@ -154,7 +154,7 @@ class SmartFilterCommandFilter:
                         prohibit_str += "\n"
                     if not flag:
                         prohibit_str += "当前平台不存在违规消息\n"
-                prohibit_str += "💡部分消息可能被折叠，通过'/sf checku 用户ID 消息平台'以查看特定用户的详细信息"
+                prohibit_str += "💡部分消息可能被折叠，查看单用户详细信息请使用命令/sf checku 用户ID 消息平台"
                 chain = MessageChain().message(prohibit_str.strip())
         await event.send(chain)
 
@@ -232,7 +232,7 @@ class SmartFilterCommandFilter:
                         await file_manager.write_file(self._plugin.ban_list)
                         break
                 if not chain:
-                    send_str = f"未找到用户{user_id}的违规消息，请使用/sf check来查看当前记录的所有平台的违规消息"
+                    send_str = f"未找到用户{user_id}的违规消息，查看所有平台违规消息概览请使用命令/sf check"
                     chain = MessageChain().message(send_str)
         await event.send(chain)
 

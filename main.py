@@ -315,7 +315,7 @@ class SmartFilter(Star):
                 notify_msg += f"📫上下文：{violation_info['context_str']}\n"
 
             notify_msg += "━━━━━━━━━━━━━━━━\n"
-            notify_msg += f"💡 使用 /sf checku {violation_info['user_id']} {violation_info['platform']} 查看详情"
+            notify_msg += f"💡 查看详情请使用命令 /sf checku {violation_info['user_id']} {violation_info['platform']}"
 
             # 创建消息链
             chain = MessageChain().message(notify_msg)
