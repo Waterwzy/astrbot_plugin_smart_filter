@@ -47,6 +47,11 @@
                 "description" : "是否开启debug模式",
                 "hint" : "debug模式：在利用违禁对话人设发送消息后发送一条审核模型返回的原始数据，可用于优化提示词（不适用于生产环境）",
                 "type" : "bool"
+            },
+            "skip_empty_mode" : {
+                "description" : "是否对空消息进行审核",
+                "hint" : "关闭此选项对空消息不会触发审核，可以节省tokens使用量，建议关闭",
+                "type" : "bool"
             }
         }
     },

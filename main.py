@@ -578,6 +578,10 @@ class SmartFilter(Star):
             logger.info(f"用户{sender_id}在白名单内，跳过插件处理逻辑")
             return
 
+        if not self.config["filter_config"]["skip_empty_mode"] and not msg_str.strip():
+            logger.debug(f"用户{sender_id}的消息为空，跳过审核阶段")
+            return
+
         system_prompt = (
             await self.context.persona_manager.get_persona(
                 self.config["filter_config"]["filter_prompt"]
