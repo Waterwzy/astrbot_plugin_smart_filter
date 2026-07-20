@@ -1,5 +1,9 @@
 from dataclasses import dataclass
 
+from astrbot.api import logger
+
+from . import helper
+
 
 @dataclass
 class ContextParser:
@@ -9,12 +13,39 @@ class ContextParser:
 
     context: list[dict]
     """OpenAI格式上下文消息"""
+    skip_config: list
+
+    def _normalize_str(self, content) -> str:
+        if isinstance(content, str):
+            return self._remove_astrbot_system_reminder(content)
+        r_str = ""
+        for obj in content:
+            if obj["type"] == "image_url":
+                r_str += "[图片]"
+            elif obj["type"] == "input_audio":
+                r_str += "[语音]"
+            elif obj["type"] == "file":
+                r_str += "[文件]"
+            elif obj.get("text"):
+                r_str += obj["text"]
+                r_str = self._remove_astrbot_system_reminder(r_str)
+        return r_str
 
     def _clear_other_calls(self):
         clear_index = []
         for i, obj in enumerate(self.context):
             if obj["role"] != "user":
                 clear_index.append(i)
+            elif helper.is_skip(
+                self.skip_config,
+                self._remove_astrbot_system_reminder(
+                    self._normalize_str(obj["content"])
+                ),
+            ):
+                clear_index.append(i)
+                logger.debug(
+                    f"消息{self._remove_astrbot_system_reminder(self._normalize_str(obj['content']))}符合跳过配置，不计入多轮审核。"
+                )
         self.context = [
             obj for i, obj in enumerate(self.context) if i not in clear_index
         ]
@@ -38,20 +69,6 @@ class ContextParser:
         self.context = self.context[max(0, len(self.context) - role_lenth) :]
         parsed_str = ""
         for i, context_obj in enumerate(self.context):
-            text = ""
-            if isinstance(context_obj["content"], str):
-                text = context_obj["content"]
-                text = self._remove_astrbot_system_reminder(text)
-            else:
-                for j, son_obj in enumerate(context_obj["content"]):
-                    if son_obj["type"] == "image_url":
-                        text += "[图片]"
-                    elif son_obj["type"] == "input_audio":
-                        text += "[语音]"
-                    elif son_obj["type"] == "file":
-                        text += "[文件]"
-                    elif son_obj.get("text"):
-                        text += son_obj["text"]
-                        text = self._remove_astrbot_system_reminder(text)
+            text = self._normalize_str(context_obj["content"])
             parsed_str += f"\n[Round{i + 1}]{text}"
         return parsed_str.strip()

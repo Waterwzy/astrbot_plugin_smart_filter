@@ -1,6 +1,7 @@
 import asyncio
 import copy
 import datetime
+import re
 import time
 import traceback
 
@@ -12,6 +13,7 @@ from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import Context, Star, StarTools
 from astrbot.api.web import request
 
+from .core import helper
 from .core.context_parser import ContextParser
 from .core.manager.api_manager import api_manager
 from .core.manager.command_manager import command_manager
@@ -45,6 +47,8 @@ class SmartFilter(Star):
         """后台重试任务"""
         self._admin_umo: str = ""
         """管理员的 unified_msg_origin，用于主动发送通知"""
+        self.skip_config = []
+        """跳过消息配置项"""
 
         # Register Web API for violations page
         self.context.register_web_api(
@@ -123,6 +127,23 @@ class SmartFilter(Star):
             # 数据清洗层
             if await self.refresh_all_times():
                 await file_manager.write_file(self.ban_list)
+        # 配置转换层
+        for content in self.config["filter_config"]["skip_schema"]:
+            if content["__template_key"] != "default":
+                continue
+            if content["match_type"] != "regex":
+                self.skip_config.append(
+                    {"type": content["match_type"], "content": content["match_content"]}
+                )
+            else:
+                try:
+                    con = re.compile(content["match_content"])
+                except Exception as e:
+                    logger.error(
+                        f"SmartFilter编译正则表达式错误。原始字符串{content['match_content']}，错误{e}"
+                    )
+                    continue
+                self.skip_config.append({"type": "regex", "content": con})
 
     async def handle_update(self):
         """处理配置项的更新行为"""
@@ -582,15 +603,19 @@ class SmartFilter(Star):
             logger.debug(f"用户{sender_id}的消息为空，跳过审核阶段")
             return
 
+        if helper.is_skip(self.skip_config, msg_str):
+            logger.debug(f"用户消息{msg_str}命中跳过规则，跳过审核阶段")
+            return
+
         system_prompt = (
             await self.context.persona_manager.get_persona(
                 self.config["filter_config"]["filter_prompt"]
             )
         ).system_prompt
         # logger.debug(f"原始请求体：{req.contexts}")
-        context_str = ContextParser(copy.deepcopy(req.contexts)).parse_context(
-            self.config["filter_config"]["filter_roles"]
-        )
+        context_str = ContextParser(
+            copy.deepcopy(req.contexts), self.skip_config
+        ).parse_context(self.config["filter_config"]["filter_roles"])
         logger.debug(f"解析结果：\n{context_str}")
         if self.config["filter_config"]["filter_roles"] != 0:
             filter_content = (

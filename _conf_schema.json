@@ -52,6 +52,30 @@
                 "description" : "是否对空消息进行审核",
                 "hint" : "关闭此选项对空消息不会触发审核，可以节省tokens使用量，建议关闭",
                 "type" : "bool"
+            },
+            "skip_schema" : {
+                "type" : "template_list",
+                "description" : "特定消息跳过配置",
+                "hint" : "针对特殊消息内容的跳过处理，用于屏蔽部分以user字段发送的系统消息（例如AstrBot的定时任务消息）。存在被绕过的风险，请谨慎评估后使用（如果必须使用，推荐仅使用full模式）。详细配置教程请查阅文档",
+                "templates" : {
+                    "default" : {
+                        "name" : "跳过配置项",
+                        "hint" : "描述类型消息需要跳过审核",
+                        "items" : {
+                            "match_type" : {
+                                "description" : "匹配类型",
+                                "type" : "string",
+                                "options" : ["full","prefix","suffix","regex"],
+                                "default" : "full"
+                            },
+                            "match_content" : {
+                                "description" : "匹配内容",
+                                "type" : "text",
+                                "hint" : "根据上述类型填写，如果类型为regex这里的内容必须是python的re模块可编译的正则表达式"
+                            }
+                        }
+                    }
+                }
             }
         }
     },
