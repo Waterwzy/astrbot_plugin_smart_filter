@@ -294,6 +294,16 @@ class SmartFilter(Star):
         """
         await command_manager.notify(event, action)
 
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    @sf.command("checkw")
+    async def sf_checkw(self, event: AstrMessageEvent, user: str | None = None):
+        """查看所有白名单用户或者检查某位用户是否在白名单内，如果同一用户id在同一个白名单内多次则警告管理员检查配置
+        Args:
+            event(AstrMessageEvent):AstrBot消息事件
+            user(str|None):查询用户的id，无则为查看白名单所有内容
+        """
+        await command_manager.checkw(event, user)
+
     # 违规消息主动通知相关模块
     async def send_notify_to_admin(self, violation_info: dict) -> bool:
         """立即发送违规通知给管理员

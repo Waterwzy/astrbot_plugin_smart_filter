@@ -279,5 +279,49 @@ class SmartFilterCommandFilter:
 
         await event.send(chain)
 
+    def _format_list(self, u_list: list) -> str:
+        msg_str = ""
+        for i, item in enumerate(u_list):
+            msg_str += item
+            if i != len(u_list) - 1:
+                msg_str += ","
+        return msg_str
+
+    async def checkw(self, event: AstrMessageEvent, user: str | None):
+        async with self._plugin._sf_lock:
+            user = str(user)
+            if not user:
+                collected_dict = {}
+                for us in self._plugin.config["platform_config"]["white_list"]:
+                    if not collected_dict.get(us["platform"]):
+                        collected_dict[us["platform"]] = []
+                    collected_dict[us["platform"]].append(us["user_id"])
+                msg = ""
+                for plat, users in collected_dict.items():
+                    msg += f"消息平台{plat}中的白名单用户:\n"
+                    for user_info in users:
+                        msg += f"{user_info}\n"
+                chain = MessageChain().message(msg.strip())
+            else:
+                collected_plat = []
+                repeated_plat = []
+                for us in self._plugin.config["platform_config"]["white_list"]:
+                    if us["user_id"] == user:
+                        if (
+                            us["platform"] in collected_plat
+                            and us["platform"] not in repeated_plat
+                        ):
+                            repeated_plat.append(us["platform"])
+                        if us["platform"] not in collected_plat:
+                            collected_plat.append(us["platform"])
+                if not collected_plat:
+                    msg = "当前用户不在白名单中！"
+                else:
+                    msg = f"用户{user}存在于消息平台{self._format_list(collected_plat)}中。"
+                    if repeated_plat:
+                        msg += f"\n⚠️注意：目前配置中存在该用户的白名单重复项，存在于平台{self._format_list(repeated_plat)}中，请仔细检查插件配置项。"
+                chain = MessageChain().message(msg.strip())
+        await event.send(chain)
+
 
 command_manager = SmartFilterCommandFilter()
