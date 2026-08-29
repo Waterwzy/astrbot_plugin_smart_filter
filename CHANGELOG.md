@@ -5,6 +5,7 @@
 所有更新内容都会集中写在这里
 
 ### Unreleased
+- 修复Pages页面的XSS注入bug。
 
 ### v2.5.5(2026.8.29)
 - 增加指令`/sf checkw`。

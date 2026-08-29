@@ -3,6 +3,15 @@ const bridge = window.AstrBotPluginPage;
 let violations = [];
 let selectedUsers = new Set();
 
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 function getUserKey(platform, userId) {
     return `${platform}:${userId}`;
 }
@@ -68,24 +77,24 @@ function renderTable() {
             html += '<tr>';
             if (isFirst) {
                 html += `<td class="checkbox-column" rowspan="${messageCount}">
-                    <input type="checkbox" class="user-checkbox" data-key="${key}" ${isSelected ? 'checked' : ''}>
+                    <input type="checkbox" class="user-checkbox" data-key="${escapeHtml(key)}" ${isSelected ? 'checked' : ''}>
                 </td>`;
                 html += `<td class="user-column" rowspan="${messageCount}">
                     <div class="user-info">
-                        <span class="user-id">${user.user_id}</span>
-                        <span class="platform-badge">${user.platform}</span>
+                        <span class="user-id">${escapeHtml(user.user_id)}</span>
+                        <span class="platform-badge">${escapeHtml(user.platform)}</span>
                         ${user.is_banned ? '<span class="banned-badge">已封禁</span>' : ''}
                     </div>
                 </td>`;
             }
-            html += `<td class="message-column">${msg.message}</td>`;
+            html += `<td class="message-column">${escapeHtml(msg.message)}</td>`;
             html += `<td class="time-column">${formatTime(msg.time)}</td>`;
             if (isFirst) {
                 html += `<td class="action-column" rowspan="${messageCount}">
-                    <button class="btn btn-danger btn-sm clear-btn" data-key="${key}">清除</button>
+                    <button class="btn btn-danger btn-sm clear-btn" data-key="${escapeHtml(key)}">清除</button>
                 </td>`;
                 html += `<td class="unban-column" rowspan="${messageCount}">
-                    ${user.is_banned ? `<button class="btn btn-success btn-sm unban-btn" data-key="${key}">解封</button>` : ''}
+                    ${user.is_banned ? `<button class="btn btn-success btn-sm unban-btn" data-key="${escapeHtml(key)}">解封</button>` : ''}
                 </td>`;
             }
             html += '</tr>';
