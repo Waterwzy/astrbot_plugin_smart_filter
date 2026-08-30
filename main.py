@@ -734,7 +734,9 @@ class SmartFilter(Star):
         await event.send(chain)
         if self.config["filter_config"]["debug_mode"]:
             chain = MessageChain().message(f"[DEBUG]raw content:{filter_reasoning_res}")
-            await event.send(chain)
+            await self.context.send_message(
+                self.config["notify_config"]["notify_umo"], chain
+            )
         event.stop_event()
 
     # Web API handlers for violations page
