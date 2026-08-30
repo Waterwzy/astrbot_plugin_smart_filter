@@ -1,6 +1,10 @@
 import re
+from datetime import datetime
 
-from astrbot_plugin_smart_filter_under_test.core.helper import is_skip
+from astrbot_plugin_smart_filter_under_test.core.helper import (
+    format_chinese_datetime,
+    is_skip,
+)
 
 
 def test_full_match():
@@ -40,3 +44,15 @@ def test_no_match_returns_false():
 
 def test_empty_config_returns_false():
     assert not is_skip([], "任意消息")
+
+
+def test_format_chinese_datetime_pads_fields():
+    dt = datetime(2026, 1, 2, 3, 4, 5)
+    assert format_chinese_datetime(dt) == "2026年01月02日 03:04:05"
+
+
+def test_format_chinese_datetime_accepts_pendulum_datetime():
+    import pendulum
+
+    dt = pendulum.datetime(2026, 12, 31, 23, 59, 58)
+    assert format_chinese_datetime(dt) == "2026年12月31日 23:59:58"

@@ -5,6 +5,7 @@ import pendulum
 from astrbot.api.event import AstrMessageEvent, MessageChain
 
 from .file_manager import file_manager
+from ..helper import format_chinese_datetime
 
 
 class SmartFilterCommandFilter:
@@ -206,7 +207,7 @@ class SmartFilterCommandFilter:
                     ban_str += f"消息平台：{key}\n"
                     for user, times in self._plugin.ban_list["banners"][key].items():
                         except_time = datetime.datetime.fromtimestamp(times)
-                        ban_str += f"用户{user},预计解封时间为{except_time.strftime('%Y年%m月%d日 %H:%M:%S')}\n"
+                        ban_str += f"用户{user},预计解封时间为{format_chinese_datetime(except_time)}\n"
                     if len(self._plugin.ban_list["banners"][key].items()) == 0:
                         ban_str += "当前平台没有正在封禁中的用户\n"
                 chain = MessageChain().message(ban_str.strip())

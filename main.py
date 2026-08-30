@@ -438,16 +438,18 @@ class SmartFilter(Star):
             if self.ban_list["banners"][platform][user_id] <= time.time():
                 self.ban_list["banners"][platform].pop(user_id)
             else:
-                time_str = datetime.datetime.fromtimestamp(
-                    self.ban_list["banners"][platform][user_id]
-                ).strftime("%Y年%m月%d日 %H:%M:%S")
+                time_str = helper.format_chinese_datetime(
+                    datetime.datetime.fromtimestamp(
+                        self.ban_list["banners"][platform][user_id]
+                    )
+                )
                 return (
                     "Fail",
                     f"用户正在封禁中，预计解封时间{time_str}，请尝试解封后再试",
                 )
         future = pendulum.now() + times
         self.ban_list["banners"][platform][user_id] = future.timestamp()
-        return "Success", future.strftime("%Y年%m月%d日 %H:%M:%S")
+        return "Success", helper.format_chinese_datetime(future)
 
     def check_user(
         self,
@@ -591,7 +593,7 @@ class SmartFilter(Star):
                     ban_ts = self.ban_list["banners"][sender_plat][sender_id]
                     except_time = datetime.datetime.fromtimestamp(ban_ts)
                     ban_chain = MessageChain().message(
-                        f"你在被封禁中，具体情况请联系管理员。预计解封时间:{except_time.strftime('%Y年%m月%d日 %H:%M:%S')}"
+                        f"你在被封禁中，具体情况请联系管理员。预计解封时间:{helper.format_chinese_datetime(except_time)}"
                     )
                     event.stop_event()
 
