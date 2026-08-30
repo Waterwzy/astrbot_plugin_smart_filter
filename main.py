@@ -662,6 +662,9 @@ class SmartFilter(Star):
         except Exception:
             error_msg = traceback.format_exc()
             logger.error(error_msg)
+            if self.config["filter_config"]["filter_failclose"]:
+                logger.warning(f"开启fail-close模式，自动阻断审核错误消息传播")
+                event.stop_event()
             return
 
         # 这里就是stage1没通过的消息，换人格了
