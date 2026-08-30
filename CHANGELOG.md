@@ -9,6 +9,7 @@
 - 修复 `checkw` 指令永远无法在未传入 id 的情况下展示用户的 bug。
 - 增加可选的审核 fail-close 选项。
 - 删除无意义的 reasoning 字段。
+- 增加剥离 `system_reminder` 的安全性。
 
 ### v2.5.6(2026.8.29)
 - 修复Pages页面的XSS注入bug。

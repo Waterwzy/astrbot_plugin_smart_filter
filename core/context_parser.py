@@ -1,6 +1,7 @@
 from dataclasses import dataclass
 
 from astrbot.api import logger
+from astrbot.api.all import AstrBotConfig, AstrMessageEvent
 
 from . import helper
 
@@ -14,6 +15,11 @@ class ContextParser:
     context: list[dict]
     """OpenAI格式上下文消息"""
     skip_config: list
+    """格式化后的跳过配置"""
+    ab_config: AstrBotConfig
+    """当前会话的astrbot config"""
+    event: AstrMessageEvent
+    """当前对话的event对象"""
 
     def _normalize_str(self, content) -> str:
         if isinstance(content, str):
@@ -50,11 +56,27 @@ class ContextParser:
             obj for i, obj in enumerate(self.context) if i not in clear_index
         ]
 
+    def _provider_extra_on(self) -> bool:
+        return (
+            self.ab_config["provider_settings"]["identifier"]
+            or self.ab_config["provider_settings"]["group_name_display"]
+            or self.ab_config["provider_settings"]["datetime_system_prompt"]
+        )
+
+    def _group_ltm_on(self) -> bool:
+        return self.event.get_group() and (
+            self.ab_config["provider_ltm_settings"]["group_icl_enable"]
+            or self.ab_config["provider_ltm_settings"]["active_reply"]["enable"]
+        )
+
     def _remove_astrbot_system_reminder(
         self, ori_str: str
     ) -> str:  # 去除astrbot的系统提示<system_reminder>
-        if ori_str.find("<system_reminder>") != -1:
-            return ori_str[: ori_str.find("<system_reminder>")]
+        if not (self._provider_extra_on() or self._group_ltm_on):
+            logger.debug("没有<system_reminder>后缀，不剥离")
+            return ori_str
+        if ori_str.rfind("<system_reminder>") != -1:
+            return ori_str[: ori_str.rfind("<system_reminder>")]
         else:
             return ori_str
 

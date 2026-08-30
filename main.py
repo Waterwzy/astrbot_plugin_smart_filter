@@ -624,7 +624,10 @@ class SmartFilter(Star):
         ).system_prompt
         # logger.debug(f"原始请求体：{req.contexts}")
         context_str = ContextParser(
-            copy.deepcopy(req.contexts), self.skip_config
+            copy.deepcopy(req.contexts),
+            self.skip_config,
+            self.context.get_config(event.unified_msg_origin),
+            event,
         ).parse_context(self.config["filter_config"]["filter_roles"])
         logger.debug(f"解析结果：\n{context_str}")
         if self.config["filter_config"]["filter_roles"] != 0:
