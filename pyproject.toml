@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "astrbot-plugin-smart-filter"
-version = "2.5.6"
+version = "2.6.0"
 description = "用户输入审核（smart filter）AstrBot 插件"
 readme = "README.md"
 requires-python = ">=3.10"
