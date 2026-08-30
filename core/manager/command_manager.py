@@ -289,7 +289,6 @@ class SmartFilterCommandFilter:
 
     async def checkw(self, event: AstrMessageEvent, user: str | None):
         async with self._plugin._sf_lock:
-            user = str(user)
             if not user:
                 collected_dict = {}
                 for us in self._plugin.config["platform_config"]["white_list"]:
@@ -303,6 +302,7 @@ class SmartFilterCommandFilter:
                         msg += f"{user_info}\n"
                 chain = MessageChain().message(msg.strip())
             else:
+                user = str(user)
                 collected_plat = []
                 repeated_plat = []
                 for us in self._plugin.config["platform_config"]["white_list"]:
