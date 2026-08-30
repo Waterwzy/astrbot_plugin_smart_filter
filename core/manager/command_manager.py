@@ -262,8 +262,6 @@ class SmartFilterCommandFilter:
                                 f"平台：{item['platform']} | 用户：{item['user_id']}\n"
                             )
                             notify_str += f"消息：{item['message']}\n"
-                            if item.get("reasoning"):
-                                notify_str += f"审核理由：{item['reasoning']}\n"
                             notify_str += "\n"
                         notify_str += "使用 /sf notify clear 清空所有待通知消息"
                         chain = MessageChain().message(notify_str)
