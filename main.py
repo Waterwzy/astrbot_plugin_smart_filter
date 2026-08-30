@@ -663,7 +663,7 @@ class SmartFilter(Star):
             error_msg = traceback.format_exc()
             logger.error(error_msg)
             if self.config["filter_config"]["filter_failclose"]:
-                logger.warning(f"开启fail-close模式，自动阻断审核错误消息传播")
+                logger.warning("开启fail-close模式，自动阻断审核错误消息传播")
                 event.stop_event()
             return
 
