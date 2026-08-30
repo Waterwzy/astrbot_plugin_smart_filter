@@ -1,2 +1,35 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "astrbot-plugin-smart-filter"
+version = "2.5.6"
+description = "用户输入审核（smart filter）AstrBot 插件"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "pendulum>=3.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.4",
+    "pytest-asyncio>=1.2",
+]
+
+[tool.setuptools]
+py-modules = ["main"]
+
+[tool.setuptools.packages.find]
+namespaces = true
+include = ["core*"]
+
 [tool.ruff.lint]
 select = ["E4", "E7", "E9", "F"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"

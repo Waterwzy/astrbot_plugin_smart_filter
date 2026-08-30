@@ -310,6 +310,33 @@
   - `user` ：**选填项**。查询特定用户的用户id。
 
 
+## 测试
+
+本项目使用 [pytest](https://docs.pytest.org/) 编写单元测试，测试不依赖真实的 AstrBot 运行时（测试通过内置的 astrbot API 桩模块隔离插件与框架）。
+
+支持的 Python 版本：3.10 ~ 3.14；支持的系统：Windows / macOS / Linux（GitHub Actions 矩阵测试）。
+
+本地运行测试：
+
+```bash
+pip install -e ".[dev]"
+python -m pytest -v
+```
+
+> [!NOTE]
+>
+> 依赖声明统一维护在 `pyproject.toml`（`[project].dependencies` 为运行时依赖，`[project.optional-dependencies].dev` 为测试依赖）。`requirements.txt` 仅保留一行运行时依赖，因为 AstrBot 的插件加载器只读取 `requirements.txt` 来为最终用户自动安装插件依赖。
+
+测试覆盖：
+
+- 消息跳过规则（`core/helper.py`）
+- 数据文件读写、损坏备份与标准化（`core/manager/file_manager.py`）
+- 上下文解析与截断（`core/context_parser.py`）
+- 封禁、解封、全量清理、数据迁移（`main.py`）
+- LLM 审核主流程：白名单/封禁/跳过规则/严格与非严格模式/fail-close/违规通知/二次回复（`main.py`）
+- 全部 `/sf` 指令（`core/manager/command_manager.py`）
+- Web API（`core/manager/api_manager.py`）
+
 ## todo-list
 
 写一点最近想添加的功能或者改动，长期更新作为提醒（

@@ -72,7 +72,7 @@ class ContextParser:
     def _remove_astrbot_system_reminder(
         self, ori_str: str
     ) -> str:  # 去除astrbot的系统提示<system_reminder>
-        if not (self._provider_extra_on() or self._group_ltm_on):
+        if not (self._provider_extra_on() or self._group_ltm_on()):
             logger.debug("没有<system_reminder>后缀，不剥离")
             return ori_str
         if ori_str.rfind("<system_reminder>") != -1:

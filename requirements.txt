@@ -1,1 +1,4 @@
-pendulum >= 3.2.0
+# AstrBot 的插件加载器只读取 requirements.txt 来自动安装插件运行时依赖，
+# 因此本文件保留一行以兼容 AstrBot（内容与 pyproject.toml 的
+# [project].dependencies 保持一致）。
+pendulum>=3.2.0
