@@ -743,9 +743,12 @@ class SmartFilter(Star):
         await event.send(chain)
         if self.config["filter_config"]["debug_mode"]:
             chain = MessageChain().message(f"[DEBUG]raw content:{filter_reasoning_res}")
-            await self.context.send_message(
-                self.config["notify_config"]["notify_umo"], chain
-            )
+            try :
+                await self.context.send_message(
+                    self.config["notify_config"]["notify_umo"], chain
+                )
+            except Exception as e:
+                logger.error(f"DEBUG 消息发送失败，报错消息：{e}")
 
     # Web API handlers for violations page
     async def api_get_violations(self):
