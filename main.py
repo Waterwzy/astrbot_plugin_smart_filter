@@ -672,6 +672,7 @@ class SmartFilter(Star):
                 event.stop_event()
             return
 
+        event.stop_event()
         # 这里就是stage1没通过的消息，换人格了
         # chain = MessageChain().message(f"审核模型拒绝！")
         async with self._sf_lock:
@@ -745,7 +746,6 @@ class SmartFilter(Star):
             await self.context.send_message(
                 self.config["notify_config"]["notify_umo"], chain
             )
-        event.stop_event()
 
     # Web API handlers for violations page
     async def api_get_violations(self):
