@@ -172,11 +172,9 @@ async def test_notify_check_and_clear(make_plugin, config):
 
     plugin.ban_list["pending_notifications"] = [
         {
-            "timestamp": pendulum.now().timestamp(),
-            "platform": "test_platform",
-            "user_id": "u1",
-            "message": "m",
-            "retry_count": 0,
+            "id": "abc",
+            "times": 0,
+            "content": "【违规消息通知】\n用户：u1\n消息：m",
         }
     ]
     event2 = AstrMessageEvent(sender_id="admin", message="x", platform="test_platform")
@@ -187,6 +185,24 @@ async def test_notify_check_and_clear(make_plugin, config):
     await command_manager.notify(event3, "clear")
     assert "已清空 1 条" in str(event3.sent[-1])
     assert plugin.ban_list["pending_notifications"] == []
+
+
+async def test_notify_with_live_manager_queue(make_plugin, config):
+    config["notify_config"]["enable_notify"] = True
+    config["notify_config"]["notify_umo"] = "admin:umo"
+    plugin = await _plugin_with_manager(make_plugin, config)
+    # 模拟发送失败，使消息进入通知管理器的内存重试队列
+    plugin.context.fail_send = True
+    await plugin._notify_manager.add_notify("队列中的通知文本")
+
+    event = AstrMessageEvent(sender_id="admin", message="x", platform="test_platform")
+    await command_manager.notify(event, "check")
+    assert "队列中的通知文本" in str(event.sent[-1])
+
+    event2 = AstrMessageEvent(sender_id="admin", message="x", platform="test_platform")
+    await command_manager.notify(event2, "clear")
+    assert "已清空 1 条" in str(event2.sent[-1])
+    assert await plugin._notify_manager.get_pending() == []
 
 
 async def test_notify_invalid_action(make_plugin, config):

@@ -4,6 +4,7 @@ import datetime
 import re
 import time
 import traceback
+import uuid
 
 import pendulum
 
@@ -18,6 +19,7 @@ from .core.context_parser import ContextParser
 from .core.manager.api_manager import api_manager
 from .core.manager.command_manager import command_manager
 from .core.manager.file_manager import file_manager
+from .core.manager.notify_manager import NotifyManager
 
 # pyright: reportAttributeAccessIssue=false
 
@@ -41,12 +43,8 @@ class SmartFilter(Star):
         """记录上次全量清理过期封禁的时间戳，用于定期触发 unban_all"""
         self._unban_interval: float = 300.0
         """全量清理的最小间隔（秒），默认 5 分钟"""
-        self._last_retry_ts: float = 0.0
-        """记录上次重试通知的时间戳"""
-        self._retry_task = None
-        """后台重试任务"""
-        self._admin_umo: str = ""
-        """管理员的 unified_msg_origin，用于主动发送通知"""
+        self._notify_manager = None
+        """违规通知管理器，统一负责违规通知与DEBUG模式消息的发送、重试与落盘恢复"""
         self.skip_config = []
         """跳过消息配置项"""
 
@@ -90,25 +88,7 @@ class SmartFilter(Star):
             logger.error("配置参数check_disshow_time不能小于或等于0")
         if self.config["filter_config"]["filter_roles"] < 0:
             logger.error("配置参数filter_roles不能小于0")
-        if self.config.get("notify_config", {}).get("enable_notify", False):
-            if not self.config["notify_config"]["notify_umo"]:
-                logger.warning("[违规通知]已启用违规通知功能，但管理员尚未注册")
-            else:
-                self._admin_umo = self.config["notify_config"]["notify_umo"]
-                logger.info("[违规通知] 已启用违规通知功能，通知将发送至管理员")
-                logger.info(
-                    f"[违规通知] 重试配置：间隔 {self.config.get('notify_config', {}).get('notify_retry_intrvael', 60)}秒，最多重试 {self.config.get('notify_config', {}).get('notify_max_retries', 3)}次"
-                )
-
-                # 启动后台重试任务
-                if self._retry_task is None or self._retry_task.done():
-                    self._retry_task = asyncio.create_task(
-                        self.retry_failed_notifications()
-                    )
-                    logger.info("[违规通知] 已启动通知重试后台任务")
-        else:
-            logger.info("[违规通知] 违规通知功能未启用")
-        # 兼容层：将未记录时间的违规消息增加时间记录
+        # 兼容层：数据迁移与通知管理器初始化（迁移必须先于通知队列恢复执行）
         async with self._sf_lock:
             if "v2.3.0" not in self.ban_list["data_migrate_tag"]:
                 logger.info("正在进行v2.3.0数据更新...")
@@ -124,9 +104,65 @@ class SmartFilter(Star):
                                 pro_list[i] = new_type
                 self.ban_list["data_migrate_tag"].append("v2.3.0")
                 await file_manager.write_file(self.ban_list)
+            # 兼容层：v2.6.0起，待通知队列条目统一为{"id", "times", "content"}格式
+            if "v2.6.0" not in self.ban_list["data_migrate_tag"]:
+                logger.info("正在进行v2.6.0数据迁移...")
+                migrated_pending = []
+                for item in self.ban_list["pending_notifications"]:
+                    if isinstance(item, dict) and "content" in item:
+                        # 新格式条目原样保留
+                        migrated_pending.append(item)
+                        continue
+                    if isinstance(item, dict):
+                        # 旧格式（v2.6.0及以前）条目为违规信息字典，重新拼装为完整的通知文案
+                        migrated_pending.append(
+                            {
+                                "id": str(uuid.uuid4()),
+                                "times": int(item.get("retry_count", 0) or 0),
+                                "content": self._format_violation_notify(item),
+                            }
+                        )
+                        continue
+                    logger.warning(
+                        f"v2.6.0数据迁移：无法识别的待通知条目将被丢弃：{item}"
+                    )
+                self.ban_list["pending_notifications"] = migrated_pending
+                self.ban_list["data_migrate_tag"].append("v2.6.0")
+                await file_manager.write_file(self.ban_list)
             # 数据清洗层
             if await self.refresh_all_times():
                 await file_manager.write_file(self.ban_list)
+            # 违规通知与DEBUG模式的发送统一由notify_manager管理（需已配置umo）
+            if (
+                self.config.get("notify_config", {}).get("enable_notify", False)
+                or self.config["filter_config"]["debug_mode"]
+            ) and self.config["notify_config"]["notify_umo"]:
+                self._notify_manager = NotifyManager(self)
+                restored = await self._notify_manager.resume()
+                # 队列已装入内存，清空数据文件中的快照，避免下次初始化重复恢复
+                if self.ban_list["pending_notifications"]:
+                    self.ban_list["pending_notifications"] = []
+                    await file_manager.write_file(self.ban_list)
+                if self.config.get("notify_config", {}).get("enable_notify", False):
+                    logger.info("[违规通知] 已启用违规通知功能，通知将发送至管理员")
+                    logger.info(
+                        f"[违规通知] 重试配置：间隔 {self.config['notify_config']['notify_retry_intrvael']}秒，最多重试 {self.config['notify_config']['notify_max_retries']}次"
+                    )
+                if self.config["filter_config"]["debug_mode"]:
+                    logger.info(
+                        "[违规通知] 已启用DEBUG模式，审核原始数据将发送至管理员会话"
+                    )
+                if restored:
+                    logger.info(f"[违规通知] 已恢复{restored}条停机时未发送成功的通知")
+            else:
+                if self.config.get("notify_config", {}).get("enable_notify", False):
+                    logger.warning("[违规通知]已启用违规通知功能，但管理员尚未注册")
+                elif self.config["filter_config"]["debug_mode"]:
+                    logger.warning(
+                        "[违规通知]已开启DEBUG模式，但未配置notify_umo，审核原始数据无法发送"
+                    )
+                else:
+                    logger.info("[违规通知] 违规通知功能未启用")
         # 配置转换层
         for content in self.config["filter_config"]["skip_schema"]:
             if content["__template_key"] != "default":
@@ -305,120 +341,46 @@ class SmartFilter(Star):
         await command_manager.checkw(event, user)
 
     # 违规消息主动通知相关模块
-    async def send_notify_to_admin(self, violation_info: dict) -> bool:
-        """立即发送违规通知给管理员
+    def _format_violation_notify(self, violation_info: dict) -> str:
+        """将违规信息字典组装为完整的通知文案（与旧版本发送格式保持一致）
 
         Args:
-            violation_info: 违规信息字典，包含 platform, user_id, message, reasoning, timestamp
+            violation_info: 违规信息字典，包含字段：
+                timestamp(float):违规消息时间戳
+                platform(str):违规消息所在平台
+                user_id(str):发送违规消息的用户id
+                message(str):违规消息内容
+                counts(int):该用户累计违规次数
+                context_str(str):违规消息的上下文文本
 
         Returns:
-            bool: 发送是否成功
+            str: 组装完成的完整通知消息
         """
-        try:
-            # 检查是否已注册管理员 umo
-            if not self._admin_umo:
-                logger.warning("[违规通知] 管理员未注册，请先通过配置项添加会话umo注册")
-                return False
-
-            # 构建通知消息（优化格式，添加长度限制）
-            time_str = datetime.datetime.fromtimestamp(
-                violation_info["timestamp"]
-            ).strftime("%Y-%m-%d %H:%M:%S")
-
-            # 限制消息长度，避免过长
-            msg_content = violation_info["message"]
-            if len(msg_content) > 200:
-                msg_content = msg_content[:200] + "..."
-
-            if len(violation_info["context_str"]) > 200:
-                violation_info["context_str"] = (
-                    violation_info["context_str"][:200] + "..."
-                )
-
-            notify_msg = "【违规消息通知】\n"
-            notify_msg += "━━━━━━━━━━━━━━━━\n"
-            notify_msg += f"⏰ 时间：{time_str}\n"
-            notify_msg += f"📱 平台：{violation_info['platform']}\n"
-            notify_msg += f"👤 用户：{violation_info['user_id']}\n"
-            notify_msg += f"💬 消息：{msg_content}\n"
-            notify_msg += f"📊 总计次数：{violation_info['counts']}\n"
-            if self.config["filter_config"]["filter_roles"]:
-                notify_msg += f"📫上下文：{violation_info['context_str']}\n"
-
-            notify_msg += "━━━━━━━━━━━━━━━━\n"
-            notify_msg += f"💡 查看详情请使用命令 /sf checku {violation_info['user_id']} {violation_info['platform']}"
-
-            # 创建消息链
-            chain = MessageChain().message(notify_msg)
-
-            logger.info(f"[违规通知] 准备发送通知给管理员 (umo: {self._admin_umo})")
-
-            # 使用保存的 admin_umo 发送消息
-            await self.context.send_message(self._admin_umo, chain)
-
-            logger.info("[违规通知] 通知发送成功")
-            return True
-
-        except Exception as e:
-            logger.error(f"[违规通知] 发送失败: {e}")
-            logger.debug(traceback.format_exc())
-            return False
-
-    async def retry_failed_notifications(self):
-        """定期重试发送失败的通知"""
-        while True:
-            try:
-                await asyncio.sleep(
-                    self.config.get("notify_config", {}).get(
-                        "notify_retry_intrvael", 60
-                    )
-                )
-
-                async with self._sf_lock:
-                    # 检查 ban_list 是否已初始化
-                    if not self.ban_list or not self.ban_list.get(
-                        "pending_notifications"
-                    ):
-                        continue
-
-                    max_retries = self.config.get("notify_config", {}).get(
-                        "notify_max_retries", 3
-                    )
-                    failed_items = []
-
-                    for item in self.ban_list["pending_notifications"]:
-                        retry_count = item.get("retry_count", 0)
-
-                        if retry_count >= max_retries:
-                            logger.warning(
-                                f"[违规通知] 通知重试次数已达上限，丢弃: {item['user_id']}@{item['platform']}"
-                            )
-                            continue
-
-                        # 尝试重新发送
-                        logger.info(
-                            f"[违规通知] 重试发送通知 (第{retry_count + 1}次): {item['user_id']}@{item['platform']}"
-                        )
-                        success = await self.send_notify_to_admin(item)
-
-                        if not success:
-                            item["retry_count"] = retry_count + 1
-                            failed_items.append(item)
-
-                    # 更新队列，只保留失败的
-                    self.ban_list["pending_notifications"] = failed_items
-                    if failed_items:
-                        await file_manager.write_file(self.ban_list)
-                        logger.info(
-                            f"[违规通知] 队列中还有 {len(failed_items)} 条待重试通知"
-                        )
-
-            except asyncio.CancelledError:
-                logger.info("[违规通知] 重试任务已取消")
-                break
-            except Exception as e:
-                logger.error(f"[违规通知] 重试任务异常: {e}")
-                logger.debug(traceback.format_exc())
+        time_str = datetime.datetime.fromtimestamp(
+            violation_info.get("timestamp", time.time())
+        ).strftime("%Y-%m-%d %H:%M:%S")
+        # 限制消息长度，避免过长
+        msg_content = violation_info.get("message", "")
+        if len(msg_content) > 200:
+            msg_content = msg_content[:200] + "..."
+        context_str = violation_info.get("context_str", "")
+        if len(context_str) > 200:
+            context_str = context_str[:200] + "..."
+        notify_msg = "【违规消息通知】\n"
+        notify_msg += "━━━━━━━━━━━━━━━━\n"
+        notify_msg += f"⏰ 时间：{time_str}\n"
+        notify_msg += f"📱 平台：{violation_info.get('platform', '')}\n"
+        notify_msg += f"👤 用户：{violation_info.get('user_id', '')}\n"
+        notify_msg += f"💬 消息：{msg_content}\n"
+        notify_msg += f"📊 总计次数：{violation_info.get('counts', 0)}\n"
+        if self.config["filter_config"]["filter_roles"]:
+            notify_msg += f"📫上下文：{context_str}\n"
+        notify_msg += "━━━━━━━━━━━━━━━━\n"
+        notify_msg += (
+            f"💡 查看详情请使用命令 /sf checku {violation_info.get('user_id', '')}"
+            f" {violation_info.get('platform', '')}"
+        )
+        return notify_msg
 
     # 辅助函数，包括封禁用户的具体方法，检查输入参数，解封用户，拼接违规字符串
     async def ban_user(
@@ -542,14 +504,9 @@ class SmartFilter(Star):
 
     # 插件销毁释放资源
     async def terminate(self):
-        """插件销毁时的清理钩子，清理后台任务"""
-        if self._retry_task and not self._retry_task.done():
-            self._retry_task.cancel()
-            try:
-                await self._retry_task
-            except asyncio.CancelledError:
-                pass
-            logger.info("[违规通知] 已停止通知重试后台任务")
+        """插件销毁时的清理钩子，停止通知后台任务并落盘待发送通知"""
+        if self._notify_manager is not None:
+            await self._notify_manager.stop()
         await file_manager.write_file(self.ban_list, force=True)
 
     # 主钩子入口，检查用户输入
@@ -687,8 +644,11 @@ class SmartFilter(Star):
 
             await file_manager.write_file(self.ban_list)
 
-        # 立即发送违规通知给管理员（如果开启了通知功能）
-        if self.config.get("notify_config", {}).get("enable_notify", False):
+        # 立即发送违规通知给管理员（发送失败由notify_manager自动重试）
+        if (
+            self.config.get("notify_config", {}).get("enable_notify", False)
+            and self._notify_manager is not None
+        ):
             notification_item = {
                 "timestamp": time.time(),
                 "platform": sender_plat,
@@ -696,22 +656,12 @@ class SmartFilter(Star):
                 "message": msg_str,
                 "counts": len(self.ban_list["prohibits"][sender_plat][sender_id]),
                 "context_str": context_str,
-                "retry_count": 0,
             }
 
             logger.info(f"[违规通知] 检测到违规消息：用户 {sender_id}@{sender_plat}")
-
-            # 尝试立即发送通知
-            success = await self.send_notify_to_admin(notification_item)
-
-            # 如果发送失败，加入重试队列
-            if not success:
-                async with self._sf_lock:
-                    self.ban_list["pending_notifications"].append(notification_item)
-                    await file_manager.write_file(self.ban_list)
-                    logger.warning(
-                        f"[违规通知] 通知发送失败，已加入重试队列（当前队列长度：{len(self.ban_list['pending_notifications'])}）"
-                    )
+            await self._notify_manager.add_notify(
+                self._format_violation_notify(notification_item)
+            )
 
         if self.config["speak_config"]["enable_speak"]:
             speak_prompt_str = (
@@ -741,14 +691,14 @@ class SmartFilter(Star):
             )
         chain = MessageChain().message(res_str)
         await event.send(chain)
-        if self.config["filter_config"]["debug_mode"]:
-            chain = MessageChain().message(f"[DEBUG]raw content:{filter_reasoning_res}")
-            try:
-                await self.context.send_message(
-                    self.config["notify_config"]["notify_umo"], chain
-                )
-            except Exception as e:
-                logger.error(f"DEBUG 消息发送失败，报错消息：{e}")
+        # DEBUG模式下将审核模型的原始返回经notify_manager发送至管理员会话
+        if (
+            self.config["filter_config"]["debug_mode"]
+            and self._notify_manager is not None
+        ):
+            await self._notify_manager.add_notify(
+                f"[DEBUG]raw content:{filter_reasoning_res}"
+            )
 
     # Web API handlers for violations page
     async def api_get_violations(self):

@@ -175,6 +175,74 @@ async def test_initialize_migrates_v2_3_0_data(make_plugin):
     assert "v2.3.0" in plugin.ban_list["data_migrate_tag"]
 
 
+async def test_initialize_migrates_v2_6_0_pending_notifications(make_plugin):
+    data = {
+        "available_platforms": ["test_platform"],
+        "prohibits": {"test_platform": {}},
+        "banners": {"test_platform": {}},
+        "white_list": {"test_platform": []},
+        "pending_notifications": [
+            {
+                "timestamp": 1700000000.0,
+                "platform": "test_platform",
+                "user_id": "u1",
+                "message": "违规词",
+                "counts": 2,
+                "context_str": "上一轮上下文",
+                "retry_count": 1,
+            },
+            {
+                "timestamp": 1700000060.0,
+                "platform": "test_platform",
+                "user_id": "u2",
+                "message": "缺省字段的旧条目",
+            },
+            {"id": "keep-me", "times": 0, "content": "已是新格式的条目"},
+        ],
+        "data_migrate_tag": ["v2.3.0"],
+    }
+    plugin = await make_plugin(data=data)
+    assert "v2.6.0" in plugin.ban_list["data_migrate_tag"]
+    pending = plugin.ban_list["pending_notifications"]
+    assert len(pending) == 3
+    first = pending[0]
+    assert set(first.keys()) == {"id", "times", "content"}
+    assert first["times"] == 1  # 继承旧条目的重试次数
+    assert "违规词" in first["content"]
+    assert "用户：u1" in first["content"]
+    assert "总计次数：2" in first["content"]
+    assert "📫上下文：上一轮上下文" in first["content"]
+    second = pending[1]
+    assert second["times"] == 0
+    assert "缺省字段的旧条目" in second["content"]
+    assert "总计次数：0" in second["content"]
+    assert pending[2] == {"id": "keep-me", "times": 0, "content": "已是新格式的条目"}
+
+
+async def test_initialize_resumes_pending_notifications(make_plugin, config):
+    config["notify_config"]["enable_notify"] = True
+    config["notify_config"]["notify_umo"] = "admin:umo"
+    data = {
+        "available_platforms": ["test_platform"],
+        "prohibits": {"test_platform": {}},
+        "banners": {"test_platform": {}},
+        "white_list": {"test_platform": []},
+        "pending_notifications": [
+            {"id": "old-1", "times": 1, "content": "停机前未发送的通知"}
+        ],
+        "data_migrate_tag": ["v2.3.0", "v2.6.0"],
+    }
+    plugin = await make_plugin(config, data=data)
+    assert plugin._notify_manager is not None
+    pending = await plugin._notify_manager.get_pending()
+    assert len(pending) == 1
+    assert pending[0]["id"] == "old-1"
+    assert pending[0]["times"] == 1
+    assert pending[0]["content"] == "停机前未发送的通知"
+    # 恢复后数据文件中的快照被清空，防止下次初始化重复恢复
+    assert plugin.ban_list["pending_notifications"] == []
+
+
 async def test_initialize_compiles_skip_schema(make_plugin, config):
     plugin = await make_plugin(config)
     types = [item["type"] for item in plugin.skip_config]
@@ -390,7 +458,8 @@ async def test_check_request_notify_success(make_plugin, config):
     config["notify_config"]["enable_notify"] = True
     config["notify_config"]["notify_umo"] = "admin:umo"
     plugin = await make_plugin(config)
-    assert plugin._admin_umo == "admin:umo"
+    assert plugin._notify_manager is not None
+    assert plugin._notify_manager.admin_umo == "admin:umo"
     event = AstrMessageEvent(sender_id="u1", message="骂人", platform="test_platform")
     plugin.context.llm_script.append(LLMResponse(completion_text="block"))
     await plugin.check_request(event, ProviderRequest())
@@ -398,6 +467,7 @@ async def test_check_request_notify_success(make_plugin, config):
     umo, chain = plugin.context.sent_messages[0]
     assert umo == "admin:umo"
     assert "骂人" in str(chain)
+    assert await plugin._notify_manager.get_pending() == []
 
 
 async def test_check_request_notify_failure_queues(make_plugin, config):
@@ -408,10 +478,30 @@ async def test_check_request_notify_failure_queues(make_plugin, config):
     event = AstrMessageEvent(sender_id="u1", message="骂人", platform="test_platform")
     plugin.context.llm_script.append(LLMResponse(completion_text="block"))
     await plugin.check_request(event, ProviderRequest())
-    pending = plugin.ban_list["pending_notifications"]
+    pending = await plugin._notify_manager.get_pending()
     assert len(pending) == 1
-    assert pending[0]["user_id"] == "u1"
-    assert pending[0]["retry_count"] == 0
+    assert pending[0]["times"] == 0
+    assert "u1" in pending[0]["content"]
+    assert "骂人" in pending[0]["content"]
+    # 运行时队列仅保存在内存中，数据文件的待通知快照保持为空
+    assert plugin.ban_list["pending_notifications"] == []
+
+
+async def test_check_request_debug_mode_sends_raw_content(make_plugin, config):
+    config["filter_config"]["debug_mode"] = True
+    config["notify_config"]["notify_umo"] = "admin:umo"
+    plugin = await make_plugin(config)
+    assert plugin._notify_manager is not None
+    event = AstrMessageEvent(sender_id="u1", message="骂人", platform="test_platform")
+    plugin.context.llm_script.append(
+        LLMResponse(completion_text="block", raw_completion="raw-debug-output")
+    )
+    await plugin.check_request(event, ProviderRequest())
+    # 违规通知未开启，仅DEBUG原始内容经notify_manager发送至管理员会话
+    assert len(plugin.context.sent_messages) == 1
+    umo, chain = plugin.context.sent_messages[0]
+    assert umo == "admin:umo"
+    assert "[DEBUG]raw content:raw-debug-output" in str(chain)
 
 
 # ---------------------------------------------------------------- terminate
@@ -427,10 +517,27 @@ async def test_terminate_writes_file(make_plugin, config, tmp_path):
     assert "u1" in saved["prohibits"]["test_platform"]
 
 
-async def test_terminate_cancels_retry_task(make_plugin, config):
+async def test_terminate_cancels_notify_manager_task(make_plugin, config):
     config["notify_config"]["enable_notify"] = True
     config["notify_config"]["notify_umo"] = "admin:umo"
     plugin = await make_plugin(config)
-    assert plugin._retry_task is not None
+    assert plugin._notify_manager is not None
     await plugin.terminate()
-    assert plugin._retry_task.done()
+    assert plugin._notify_manager._retry_task.done()
+
+
+async def test_terminate_snapshots_pending_notifications(make_plugin, config, tmp_path):
+    config["notify_config"]["enable_notify"] = True
+    config["notify_config"]["notify_umo"] = "admin:umo"
+    plugin = await make_plugin(config)
+    plugin.context.fail_send = True
+    event = AstrMessageEvent(sender_id="u1", message="骂人", platform="test_platform")
+    plugin.context.llm_script.append(LLMResponse(completion_text="block"))
+    await plugin.check_request(event, ProviderRequest())
+    assert len(await plugin._notify_manager.get_pending()) == 1
+    await plugin.terminate()
+    saved = json.loads((tmp_path / "banlist.json").read_text(encoding="utf-8"))
+    pending = saved["pending_notifications"]
+    assert len(pending) == 1
+    assert "骂人" in pending[0]["content"]
+    assert "v2.6.0" in saved["data_migrate_tag"]

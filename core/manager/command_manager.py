@@ -247,27 +247,29 @@ class SmartFilterCommandFilter:
             chain = self._plugin.check_user([event.get_platform_name()])
 
             if chain is None:
+                manager = self._plugin._notify_manager
+                # 通知管理器启用时以内存重试队列为准，否则读取数据文件中的停机快照
+                if manager is not None:
+                    pending = await manager.get_pending()
+                else:
+                    pending = self._plugin.ban_list["pending_notifications"]
                 if action == "check":
-                    if not self._plugin.ban_list["pending_notifications"]:
+                    if not pending:
                         chain = MessageChain().message("当前没有待通知的违规消息")
                     else:
-                        notify_str = f"待通知的违规消息（共{len(self._plugin.ban_list['pending_notifications'])}条）：\n\n"
-                        for idx, item in enumerate(
-                            self._plugin.ban_list["pending_notifications"], 1
-                        ):
-                            time_str = datetime.datetime.fromtimestamp(
-                                item["timestamp"]
-                            ).strftime("%Y-%m-%d %H:%M:%S")
-                            notify_str += f"[{idx}] {time_str}\n"
-                            notify_str += (
-                                f"平台：{item['platform']} | 用户：{item['user_id']}\n"
-                            )
-                            notify_str += f"消息：{item['message']}\n"
-                            notify_str += "\n"
+                        notify_str = f"待通知的违规消息（共{len(pending)}条）：\n\n"
+                        for idx, item in enumerate(pending, 1):
+                            if isinstance(item, dict) and "content" in item:
+                                content = item["content"]
+                            else:
+                                content = str(item)
+                            notify_str += f"[{idx}]\n{content}\n\n"
                         notify_str += "使用 /sf notify clear 清空所有待通知消息"
-                        chain = MessageChain().message(notify_str)
+                        chain = MessageChain().message(notify_str.strip())
                 elif action == "clear":
-                    count = len(self._plugin.ban_list["pending_notifications"])
+                    count = len(pending)
+                    if manager is not None:
+                        await manager.clear()
                     self._plugin.ban_list["pending_notifications"] = []
                     await file_manager.write_file(self._plugin.ban_list)
                     chain = MessageChain().message(f"已清空 {count} 条待通知的违规消息")
