@@ -2,6 +2,7 @@
 
 import types
 
+from ..message_components import At, Plain
 from . import filter
 from .filter import (  # noqa: F401
     PermissionType,
@@ -12,7 +13,9 @@ from .filter import (  # noqa: F401
 
 __all__ = [
     "AstrMessageEvent",
+    "At",
     "MessageChain",
+    "Plain",
     "filter",
     "PermissionType",
     "command_group",
@@ -22,17 +25,38 @@ __all__ = [
 
 
 class MessageChain:
-    """Chainable message container; ``MessageChain().message(text)``."""
+    """Chainable message container.
+
+    The real AstrBot ``MessageChain`` subclasses ``list``: components live in
+    ``self.chain`` and every builder method returns ``self``. The stub keeps
+    that surface (``.chain``, ``.message()``, ``.at()``) because production
+    code mixes ``MessageChain().message(...)`` with ``chain.extend(...)``.
+    """
 
     def __init__(self):
-        self.messages = []
+        self.chain = []
 
     def message(self, msg):
-        self.messages.append(str(msg))
+        self.chain.append(Plain(msg))
         return self
 
+    def at(self, name, qq):
+        self.chain.append(At(qq=qq, name=name))
+        return self
+
+    def plain_text(self):
+        """Concatenated text of every component (``At`` renders as ``@name``)."""
+        return "".join(str(component) for component in self.chain)
+
+    def at_mentions(self):
+        """The ``qq`` ids of every ``At`` component, in order."""
+        return [c.qq for c in self.chain if isinstance(c, At)]
+
     def __str__(self):
-        return "".join(self.messages)
+        return self.plain_text()
+
+    def __repr__(self):
+        return f"MessageChain({self.chain!r})"
 
 
 class AstrMessageEvent:

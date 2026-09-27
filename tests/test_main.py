@@ -467,7 +467,25 @@ async def test_check_request_notify_success(make_plugin, config):
     umo, chain = plugin.context.sent_messages[0]
     assert umo == "admin:umo"
     assert "骂人" in str(chain)
+    # notify_at_ids 为空时不追加任何@组件，消息链保持原样
+    assert chain.at_mentions() == []
     assert await plugin._notify_manager.get_pending() == []
+
+
+async def test_check_request_notify_at_ids_mentions_admins(make_plugin, config):
+    config["notify_config"]["enable_notify"] = True
+    config["notify_config"]["notify_umo"] = "admin:umo"
+    config["notify_config"]["notify_at_ids"] = ["111", "222"]
+    plugin = await make_plugin(config)
+    event = AstrMessageEvent(sender_id="u1", message="骂人", platform="test_platform")
+    plugin.context.llm_script.append(LLMResponse(completion_text="block"))
+    await plugin.check_request(event, ProviderRequest())
+    umo, chain = plugin.context.sent_messages[0]
+    assert umo == "admin:umo"
+    # @ 组件按配置顺序排在正文之前
+    assert [type(component).__name__ for component in chain.chain[:2]] == ["At", "At"]
+    assert chain.at_mentions() == ["111", "222"]
+    assert "骂人" in str(chain)
 
 
 async def test_check_request_notify_failure_queues(make_plugin, config):
@@ -502,6 +520,7 @@ async def test_check_request_debug_mode_sends_raw_content(make_plugin, config):
     umo, chain = plugin.context.sent_messages[0]
     assert umo == "admin:umo"
     assert "[DEBUG]raw content:raw-debug-output" in str(chain)
+    assert chain.at_mentions() == []
 
 
 # ---------------------------------------------------------------- terminate

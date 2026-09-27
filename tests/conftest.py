@@ -43,7 +43,12 @@ from astrbot.api.web import request  # noqa: E402
 
 
 def make_config():
-    """A complete default configuration matching ``_conf_schema.json``."""
+    """A complete default configuration matching ``_conf_schema.json``.
+
+    AstrBot fills every key declared in the schema when it loads a plugin, so
+    the config a star actually receives is always complete and every option
+    declared there must be present here too.
+    """
     return {
         "filter_config": {
             "filter_prompt": "审核提示词",
@@ -102,6 +107,7 @@ def make_config():
             "notify_umo": "",
             "notify_retry_intrvael": 60,
             "notify_max_retries": 3,
+            "notify_at_ids": [],
         },
         "command_config": {
             "check_show_ban": True,
