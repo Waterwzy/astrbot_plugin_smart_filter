@@ -92,6 +92,8 @@ class NotifyManager:
         Returns:
             new_chain(MessageChain): 完整的消息链
         """
+        if not self._plugin.config["notify_config"]["notify_at_ids"]:
+            return msg
         new_chain = MessageChain()
         for user_id in self._plugin.config["notify_config"]["notify_at_ids"]:
             new_chain.at("", user_id)
