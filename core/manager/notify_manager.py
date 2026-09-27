@@ -1,6 +1,7 @@
 import asyncio
 import copy
 import uuid
+import traceback
 
 from astrbot.api import logger
 from astrbot.api.event import MessageChain
@@ -71,16 +72,32 @@ class NotifyManager:
         """
         try:
             await self._plugin.context.send_message(
-                self.admin_umo, MessageChain().message(msg)
+                self.admin_umo, self._add_at_in_msg(MessageChain().message(msg))
             )
             return True
         except Exception:
             logger.error(
-                f"消息“{msg}”发送至umo：{self.admin_umo}的任务失败，请检查相关配置"
+                f"消息“{msg}”发送至umo：{self.admin_umo}的任务失败，请检查相关配置，详细堆栈消息：\n{traceback.format_exc()}"
             )
             if not is_retry:
                 await self._add_retry(msg)
             return False
+
+    def _add_at_in_msg(self, msg: MessageChain) -> MessageChain:
+        """给消息通知加上@消息组件
+
+        Args:
+            msg(MessageChain): 未添加@的消息链
+
+        Returns:
+            new_chain(MessageChain): 完整的消息链
+        """
+        new_chain = MessageChain()
+        for user_id in self._plugin.config["notify_config"]["notify_at_ids"]:
+            new_chain.at("", user_id)
+        new_chain.message("\u200b\n\u200b")
+        new_chain.chain.extend(msg.chain)
+        return new_chain
 
     async def _add_retry(self, msg: str):
         """向内存重试队列追加一条待发送消息
