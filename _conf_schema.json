@@ -30,7 +30,8 @@
             "filter_roles" : {
                 "description" : "多轮审核的对话轮数",
                 "hint" : "本插件不保留模型输出的内容，仅将最近若干轮用户输入传递给审核模型，有助于审核模型了解上下文提升审核准确性，但是数值过大可能导致额外tokens消耗，不希望开启这个功能可设置为0",
-                "type" : "int"
+                "type" : "int",
+                "slider" : {"min": 0, "max": 50, "step": 1}
             },
             "filter_group" : {
                 "description" : "是否对群聊消息开启审核",
@@ -173,13 +174,15 @@
                 "description" : "通知重试间隔（秒）",
                 "hint" : "通知发送失败后，定期重试的时间间隔，默认60秒",
                 "type" : "int",
-                "default" : 60
+                "default" : 60,
+                "slider" : {"min": 5,"max" : 3600,"step" : 1}
             },
             "notify_max_retries" : {
                 "description" : "通知最大重试次数",
                 "hint" : "单条通知最多重试次数，超过后将丢弃，默认3次",
                 "type" : "int",
-                "default" : 3
+                "default" : 3,
+                "slider" : {"min" : 0,"max" : 10 ,"step" : 1}
             },
             "notify_at_ids" : {
                 "description" : "通知消息@ id列表",
@@ -202,7 +205,8 @@
                 "description" : "违规消息出现后不在check命令中显示的时间（天）",
                 "hint" : "经过这段时间未处理的违规消息不会在check命令中显示（相关消息不会被删除），可以使用checku命令查看（请设置为大于0的整数否则插件会报错）",
                 "type" : "int",
-                "default" : 3
+                "default" : 3,
+                "slider" : {"min": 0, "step" : 1}
             }
         }
     }
