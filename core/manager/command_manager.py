@@ -7,6 +7,9 @@ from astrbot.api.event import AstrMessageEvent, MessageChain
 from .file_manager import file_manager
 from ..helper import format_chinese_datetime
 
+class BreakAllLoops(Exception):
+    pass
+
 
 class SmartFilterCommandFilter:
     """SmartFilter指令处理器
@@ -278,6 +281,32 @@ class SmartFilterCommandFilter:
                         "无效的操作类型，请使用 'check' 或 'clear'"
                     )
 
+        await event.send(chain)
+
+    async def debug(self, event: AstrMessageEvent, id: str):
+        """查看违规消息的原始返回体
+        Args:
+            event(AstrMessageEvent):AstrBot消息事件
+            id(str):违规消息的id
+        """
+        async with self._plugin._sf_lock:
+            chain_str = ""
+            try:
+                raw = ""
+                for plat_pro in self._plugin.ban_list["prohibits"].values():
+                    for user_pros in plat_pro.values():
+                        for pro in user_pros:
+                            if pro["id"] == id:
+                                raw = pro["raw"]
+                                raise BreakAllLoops
+                chain_str = f"你查询的id（{id}）不存在，请确认后再试"
+            except BreakAllLoops:
+                chain_str = raw
+                if not chain_str:
+                    chain_str = f"该id对应的违规消息存在，但是相关原始返回体不存在或者已经被清理，请尝试调整插件配置"
+                else:
+                    chain_str = "[DEBUG]" + raw
+        chain = MessageChain().message(chain_str)
         await event.send(chain)
 
     def _format_list(self, u_list: list) -> str:

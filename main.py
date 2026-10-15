@@ -5,6 +5,7 @@ import re
 import time
 import traceback
 import uuid
+import secrets
 
 import pendulum
 
@@ -129,14 +130,23 @@ class SmartFilter(Star):
                 self.ban_list["pending_notifications"] = migrated_pending
                 self.ban_list["data_migrate_tag"].append("v2.6.0")
                 await file_manager.write_file(self.ban_list)
+            # 兼容层：v2.7.0起，违规消息每条都增加唯一ID，并且增加raw字段
+            if "v2.7.0" not in self.ban_list["data_migrate_tag"]:
+                logger.info("正在进行v2.7.0数据迁移...")
+                for item in self.ban_list["prohibits"].values():
+                    for p_list in item.values():
+                        for p_content in p_list:
+                            if p_content.get("id") is None:
+                                p_content["id"] = "abpsfpt-" + secrets.token_hex(nbytes=10)
+                            if p_content.get("raw") is None:
+                                p_content["raw"] = ""
+                self.ban_list["data_migrate_tag"].append("v2.7.0")
+                await file_manager.write_file(self.ban_list)
             # 数据清洗层
             if await self.refresh_all_times():
                 await file_manager.write_file(self.ban_list)
             # 违规通知与DEBUG模式的发送统一由notify_manager管理（需已配置umo）
-            if (
-                self.config.get("notify_config", {}).get("enable_notify", False)
-                or self.config["filter_config"]["debug_mode"]
-            ) and self.config["notify_config"]["notify_umo"]:
+            if self.config.get("notify_config", {}).get("enable_notify", False) and self.config["notify_config"]["notify_umo"]:
                 self._notify_manager = NotifyManager(self)
                 restored = await self._notify_manager.resume()
                 # 队列已装入内存，清空数据文件中的快照，避免下次初始化重复恢复
@@ -148,19 +158,11 @@ class SmartFilter(Star):
                     logger.info(
                         f"[违规通知] 重试配置：间隔 {self.config['notify_config']['notify_retry_intrvael']}秒，最多重试 {self.config['notify_config']['notify_max_retries']}次"
                     )
-                if self.config["filter_config"]["debug_mode"]:
-                    logger.info(
-                        "[违规通知] 已启用DEBUG模式，审核原始数据将发送至管理员会话"
-                    )
                 if restored:
                     logger.info(f"[违规通知] 已恢复{restored}条停机时未发送成功的通知")
             else:
                 if self.config.get("notify_config", {}).get("enable_notify", False):
                     logger.warning("[违规通知]已启用违规通知功能，但管理员尚未注册")
-                elif self.config["filter_config"]["debug_mode"]:
-                    logger.warning(
-                        "[违规通知]已开启DEBUG模式，但未配置notify_umo，审核原始数据无法发送"
-                    )
                 else:
                     logger.info("[违规通知] 违规通知功能未启用")
         # 配置转换层
@@ -340,6 +342,16 @@ class SmartFilter(Star):
         """
         await command_manager.checkw(event, user)
 
+    @filter.permission_type(filter.PermissionType.ADMIN)
+    @sf.command("debug")
+    async def sf_debug(self, event: AstrMessageEvent, id: str):
+        """查看违规消息的原始返回体
+        Args:
+            event(AstrMessageEvent):AstrBot消息事件
+            id(str):违规消息的id
+        """
+        await command_manager.debug(event, id)
+
     # 违规消息主动通知相关模块
     def _format_violation_notify(self, violation_info: dict) -> str:
         """将违规信息字典组装为完整的通知文案（与旧版本发送格式保持一致）
@@ -352,6 +364,7 @@ class SmartFilter(Star):
                 message(str):违规消息内容
                 counts(int):该用户累计违规次数
                 context_str(str):违规消息的上下文文本
+                id(str):该违规消息的唯一辨识符
 
         Returns:
             str: 组装完成的完整通知消息
@@ -375,9 +388,10 @@ class SmartFilter(Star):
         notify_msg += f"📊 总计次数：{violation_info.get('counts', 0)}\n"
         if self.config["filter_config"]["filter_roles"]:
             notify_msg += f"📫上下文：{context_str}\n"
+        notify_msg += f"🔑 消息ID：{violation_info.get('id', '')}\n"
         notify_msg += "━━━━━━━━━━━━━━━━\n"
         notify_msg += (
-            f"💡 查看详情请使用命令 /sf checku {violation_info.get('user_id', '')}"
+            f"💡 查看原始返回体请使用指令 /sf debug {violation_info.get('id', '')}\n 查看详情请使用命令 /sf checku {violation_info.get('user_id', '')}"
             f" {violation_info.get('platform', '')}"
         )
         return notify_msg
@@ -446,7 +460,7 @@ class SmartFilter(Star):
         return None
 
     async def unban_all(self):
-        """解封到达封禁期限的用户，并且更新违规消息的状态
+        """解封到达封禁期限的用户，并且更新违规消息和raw内容的状态
         Returns:
             bool:核心数据是否被更改
         """
@@ -467,6 +481,14 @@ class SmartFilter(Star):
                         * SECONDS_PER_DAY
                     ):
                         words["show"] = False
+                        flag = True
+                    if (
+                        words["raw"]
+                        and pendulum.now().timestamp() - words["time"]
+                        >= self.config["filter_config"]["debug_expire_day"]
+                        * SECONDS_PER_DAY
+                    ):
+                        words["raw"] = ""
                         flag = True
         return flag
 
@@ -620,7 +642,7 @@ class SmartFilter(Star):
                     not in filter_res.completion_text
                 ):
                     return
-            filter_reasoning_res = filter_res.raw_completion or ""
+            filter_reasoning_res = str(filter_res.raw_completion) or ""
         except Exception:
             error_msg = traceback.format_exc()
             logger.error(error_msg)
@@ -632,6 +654,7 @@ class SmartFilter(Star):
         event.stop_event()
         # 这里就是stage1没通过的消息，换人格了
         # chain = MessageChain().message(f"审核模型拒绝！")
+        pro_id = "abpsfpt-"+secrets.token_hex(nbytes=10)
         async with self._sf_lock:
             if (
                 sender_plat in self.ban_list["available_platforms"]
@@ -639,7 +662,7 @@ class SmartFilter(Star):
             ):
                 self.ban_list["prohibits"][sender_plat][sender_id] = []
             self.ban_list["prohibits"][sender_plat][sender_id].append(
-                {"word": msg_str, "time": pendulum.now().timestamp(), "show": True}
+                {"id": pro_id,"word": msg_str, "time": pendulum.now().timestamp(), "show": True,"raw":filter_reasoning_res}
             )
 
             await file_manager.write_file(self.ban_list)
@@ -656,6 +679,7 @@ class SmartFilter(Star):
                 "message": msg_str,
                 "counts": len(self.ban_list["prohibits"][sender_plat][sender_id]),
                 "context_str": context_str,
+                "id": pro_id,
             }
 
             logger.info(f"[违规通知] 检测到违规消息：用户 {sender_id}@{sender_plat}")
@@ -691,14 +715,6 @@ class SmartFilter(Star):
             )
         chain = MessageChain().message(res_str)
         await event.send(chain)
-        # DEBUG模式下将审核模型的原始返回经notify_manager发送至管理员会话
-        if (
-            self.config["filter_config"]["debug_mode"]
-            and self._notify_manager is not None
-        ):
-            await self._notify_manager.add_notify(
-                f"[DEBUG]raw content:{filter_reasoning_res}"
-            )
 
     # Web API handlers for violations page
     async def api_get_violations(self):
