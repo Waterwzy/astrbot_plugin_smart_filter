@@ -137,7 +137,9 @@ class SmartFilter(Star):
                     for p_list in item.values():
                         for p_content in p_list:
                             if p_content.get("id") is None:
-                                p_content["id"] = "abpsfpt-" + secrets.token_hex(nbytes=10)
+                                p_content["id"] = "abpsfpt-" + secrets.token_hex(
+                                    nbytes=10
+                                )
                             if p_content.get("raw") is None:
                                 p_content["raw"] = ""
                 self.ban_list["data_migrate_tag"].append("v2.7.0")
@@ -146,7 +148,10 @@ class SmartFilter(Star):
             if await self.refresh_all_times():
                 await file_manager.write_file(self.ban_list)
             # 违规通知与DEBUG模式的发送统一由notify_manager管理（需已配置umo）
-            if self.config.get("notify_config", {}).get("enable_notify", False) and self.config["notify_config"]["notify_umo"]:
+            if (
+                self.config.get("notify_config", {}).get("enable_notify", False)
+                and self.config["notify_config"]["notify_umo"]
+            ):
                 self._notify_manager = NotifyManager(self)
                 restored = await self._notify_manager.resume()
                 # 队列已装入内存，清空数据文件中的快照，避免下次初始化重复恢复
@@ -654,7 +659,7 @@ class SmartFilter(Star):
         event.stop_event()
         # 这里就是stage1没通过的消息，换人格了
         # chain = MessageChain().message(f"审核模型拒绝！")
-        pro_id = "abpsfpt-"+secrets.token_hex(nbytes=10)
+        pro_id = "abpsfpt-" + secrets.token_hex(nbytes=10)
         async with self._sf_lock:
             if (
                 sender_plat in self.ban_list["available_platforms"]
@@ -662,7 +667,13 @@ class SmartFilter(Star):
             ):
                 self.ban_list["prohibits"][sender_plat][sender_id] = []
             self.ban_list["prohibits"][sender_plat][sender_id].append(
-                {"id": pro_id,"word": msg_str, "time": pendulum.now().timestamp(), "show": True,"raw":filter_reasoning_res}
+                {
+                    "id": pro_id,
+                    "word": msg_str,
+                    "time": pendulum.now().timestamp(),
+                    "show": True,
+                    "raw": filter_reasoning_res,
+                }
             )
 
             await file_manager.write_file(self.ban_list)

@@ -7,6 +7,7 @@ from astrbot.api.event import AstrMessageEvent, MessageChain
 from .file_manager import file_manager
 from ..helper import format_chinese_datetime
 
+
 class BreakAllLoops(Exception):
     pass
 
@@ -303,7 +304,7 @@ class SmartFilterCommandFilter:
             except BreakAllLoops:
                 chain_str = raw
                 if not chain_str:
-                    chain_str = f"该id对应的违规消息存在，但是相关原始返回体不存在或者已经被清理，请尝试调整插件配置"
+                    chain_str = "该id对应的违规消息存在，但是相关原始返回体不存在或者已经被清理，请尝试调整插件配置"
                 else:
                     chain_str = "[DEBUG]" + raw
         chain = MessageChain().message(chain_str)
