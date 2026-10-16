@@ -7,7 +7,8 @@ These tests pin down:
 - the untouched pass-through when the list is empty (``_conf_schema.json``
   declares no default, and AstrBot fills the key in with an empty list);
 - the exact component layout when it is configured;
-- that the immediate send path, the debug path and the retry path all use it.
+- that the immediate send path and the retry path both use it (the former
+  debug path was removed in v2.7.0 and replaced by the ``/sf debug`` command).
 
 Configs used here mirror what AstrBot hands the plugin, i.e. every key declared
 in ``_conf_schema.json`` is present, so no defensive fallback is exercised.
@@ -201,8 +202,12 @@ async def test_check_request_notify_carries_at_ids(make_plugin, config):
     await plugin.terminate()
 
 
-async def test_check_request_debug_mode_carries_at_ids(make_plugin, config):
-    config["filter_config"]["debug_mode"] = True
+async def test_check_request_violation_notify_carries_at_ids(make_plugin, config):
+    """违规通知（v2.7.0 起唯一的主动外发路径）需要带上 @ id。
+
+    旧版本的 debug_mode 外发路径已被 /sf debug 指令取代，主动外发只剩违规通知一条。
+    """
+    config["notify_config"]["enable_notify"] = True
     config["notify_config"]["notify_umo"] = "admin:umo"
     config["notify_config"]["notify_at_ids"] = ["111"]
     plugin = await make_plugin(config)
@@ -215,7 +220,9 @@ async def test_check_request_debug_mode_carries_at_ids(make_plugin, config):
 
     _, chain = plugin.context.sent_messages[0]
     assert chain.at_mentions() == ["111"]
-    assert "[DEBUG]raw content:raw-debug-output" in str(chain)
+    assert "🔑 消息ID：" in str(chain)
+    # 原始返回体不再走通知通道，只落盘供 /sf debug 查询
+    assert "raw-debug-output" not in str(chain)
     await plugin.terminate()
 
 

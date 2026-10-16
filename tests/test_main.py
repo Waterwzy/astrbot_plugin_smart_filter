@@ -6,6 +6,9 @@ import pendulum
 from astrbot.api.event import AstrMessageEvent
 from astrbot.api.provider import ProviderRequest
 from astrbot.api.star import LLMResponse
+from astrbot_plugin_smart_filter_under_test.core.manager.command_manager import (
+    command_manager,
+)
 
 
 # ---------------------------------------------------------------- basic API
@@ -90,7 +93,7 @@ async def test_unban_all_expires_bans_and_clears_records(make_plugin, config):
     plugin.ban_list["banners"]["test_platform"]["expired"] = now - 10
     plugin.ban_list["banners"]["test_platform"]["active"] = now + 3600
     plugin.ban_list["prohibits"]["test_platform"]["expired"] = [
-        {"word": "旧词", "time": now - 10, "show": True}
+        {"word": "旧词", "time": now - 10, "show": True, "raw": ""}
     ]
     flag = await plugin.unban_all()
     assert flag is True
@@ -104,8 +107,13 @@ async def test_unban_all_hides_old_violations(make_plugin, config):
     plugin = await make_plugin(config)
     now = pendulum.now().timestamp()
     plugin.ban_list["prohibits"]["test_platform"]["u1"] = [
-        {"word": "四天前", "time": now - 4 * 86400, "show": True},
-        {"word": "今天", "time": now - 60, "show": True},
+        {
+            "word": "四天前",
+            "time": now - 4 * 86400,
+            "show": True,
+            "raw": "旧原始返回体",
+        },
+        {"word": "今天", "time": now - 60, "show": True, "raw": "新原始返回体"},
     ]
     flag = await plugin.unban_all()
     assert flag is True
@@ -505,22 +513,266 @@ async def test_check_request_notify_failure_queues(make_plugin, config):
     assert plugin.ban_list["pending_notifications"] == []
 
 
-async def test_check_request_debug_mode_sends_raw_content(make_plugin, config):
-    config["filter_config"]["debug_mode"] = True
+async def test_check_request_notify_carries_message_id_and_debug_hint(
+    make_plugin, config
+):
+    """违规通知需要携带违规消息 id，并提示管理员用 /sf debug 查询原始返回体。
+
+    v2.7.0 起 debug_mode 被移除：原始返回体不再单独推送，而是随违规记录落盘，
+    由 /sf debug {id} 按需查询，因此通知里必须带上这个 id。
+    """
+    config["notify_config"]["enable_notify"] = True
     config["notify_config"]["notify_umo"] = "admin:umo"
     plugin = await make_plugin(config)
-    assert plugin._notify_manager is not None
     event = AstrMessageEvent(sender_id="u1", message="骂人", platform="test_platform")
     plugin.context.llm_script.append(
-        LLMResponse(completion_text="block", raw_completion="raw-debug-output")
+        LLMResponse(completion_text="block", raw_completion="raw-reasoning")
     )
     await plugin.check_request(event, ProviderRequest())
-    # 违规通知未开启，仅DEBUG原始内容经notify_manager发送至管理员会话
-    assert len(plugin.context.sent_messages) == 1
-    umo, chain = plugin.context.sent_messages[0]
-    assert umo == "admin:umo"
-    assert "[DEBUG]raw content:raw-debug-output" in str(chain)
-    assert chain.at_mentions() == []
+
+    pro_id = plugin.ban_list["prohibits"]["test_platform"]["u1"][0]["id"]
+    _, chain = plugin.context.sent_messages[0]
+    text = str(chain)
+    assert f"🔑 消息ID：{pro_id}" in text
+    assert f"/sf debug {pro_id}" in text
+    # 原始返回体只落盘，不再随通知外发
+    assert "raw-reasoning" not in text
+
+
+async def test_check_request_without_notify_neither_sends_nor_crashes(
+    make_plugin, config
+):
+    """关闭违规通知时违规记录照常落盘，但不向管理员会话发送任何消息。
+
+    旧实现会在 debug_mode 打开时单独推送一条原始返回体；该模式已移除，
+    因此即使 notify_umo 已配置、enable_notify 仍为关闭，也应当保持静默。
+    """
+    config["notify_config"]["notify_umo"] = "admin:umo"
+    plugin = await make_plugin(config)
+    assert plugin._notify_manager is None
+    event = AstrMessageEvent(sender_id="u1", message="骂人", platform="test_platform")
+    plugin.context.llm_script.append(
+        LLMResponse(completion_text="block", raw_completion="raw-reasoning")
+    )
+    await plugin.check_request(event, ProviderRequest())
+
+    assert plugin.context.sent_messages == []
+    records = plugin.ban_list["prohibits"]["test_platform"]["u1"]
+    assert records[0]["raw"] == "raw-reasoning"
+    assert str(event.sent[-1]) == "【您的消息不符合规范，请文明发言。】"
+
+
+# ------------------------------------------------------------------ debug 溯源
+
+
+async def test_check_request_stores_id_and_raw_completion(make_plugin, config):
+    """每条违规记录都要带上唯一 id 与审核模型原始返回体，供 /sf debug 溯源。"""
+    plugin = await make_plugin(config)
+    event = AstrMessageEvent(sender_id="u1", message="骂人", platform="test_platform")
+    plugin.context.llm_script.append(
+        LLMResponse(completion_text="block", raw_completion="思维链原文")
+    )
+    await plugin.check_request(event, ProviderRequest())
+
+    record = plugin.ban_list["prohibits"]["test_platform"]["u1"][0]
+    assert record["raw"] == "思维链原文"
+    assert record["id"].startswith("abpsfpt-")
+    assert len(record["id"]) == len("abpsfpt-") + 20  # token_hex(nbytes=10)
+
+    # 同一个用户连续违规，两条记录拿到的 id 不能重复
+    event2 = AstrMessageEvent(
+        sender_id="u1", message="又骂人", platform="test_platform"
+    )
+    plugin.context.llm_script.append(LLMResponse(completion_text="block"))
+    await plugin.check_request(event2, ProviderRequest())
+    records = plugin.ban_list["prohibits"]["test_platform"]["u1"]
+    assert len(records) == 2
+    assert records[0]["id"] != records[1]["id"]
+
+
+async def test_check_request_stringifies_non_str_raw_completion(make_plugin, config):
+    """审核 SDK 的 raw_completion 未必是字符串，落盘前需统一转成字符串。"""
+
+    class _RawCompletion:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def __str__(self):
+            return str(self.payload)
+
+    plugin = await make_plugin(config)
+    event = AstrMessageEvent(sender_id="u1", message="骂人", platform="test_platform")
+    plugin.context.llm_script.append(
+        LLMResponse(
+            completion_text="block", raw_completion=_RawCompletion({"reason": "违规"})
+        )
+    )
+    await plugin.check_request(event, ProviderRequest())
+
+    record = plugin.ban_list["prohibits"]["test_platform"]["u1"][0]
+    assert record["raw"] == "{'reason': '违规'}"
+    assert isinstance(record["raw"], str)
+
+
+# ------------------------------------------------------- v2.7.0 数据迁移
+
+
+async def test_initialize_migrates_v2_7_0_records(make_plugin):
+    """v2.7.0 迁移层：老违规记录补齐 id 与 raw，已有的字段必须原样保留。"""
+    data = {
+        "available_platforms": ["test_platform"],
+        "prohibits": {
+            "test_platform": {
+                "u1": [
+                    {"word": "老记录", "time": 1700000000.0, "show": True},
+                    {
+                        "id": "abpsfpt-keepme",
+                        "word": "已迁移",
+                        "time": 1700000001.0,
+                        "show": True,
+                        "raw": "保留的原始返回体",
+                    },
+                ]
+            }
+        },
+        "banners": {"test_platform": {}},
+        "white_list": {"test_platform": []},
+        "pending_notifications": [],
+        "data_migrate_tag": ["v2.3.0", "v2.6.0"],
+    }
+    plugin = await make_plugin(data=data)
+
+    records = plugin.ban_list["prohibits"]["test_platform"]["u1"]
+    assert records[0]["id"].startswith("abpsfpt-")
+    assert records[0]["raw"] == ""
+    assert records[1]["id"] == "abpsfpt-keepme"
+    assert records[1]["raw"] == "保留的原始返回体"
+    assert "v2.7.0" in plugin.ban_list["data_migrate_tag"]
+
+
+async def test_initialize_skips_v2_7_0_migration_when_tagged(make_plugin):
+    """迁移标签已存在时不再改动数据，避免每次启动都重写违规记录。"""
+    data = {
+        "available_platforms": ["test_platform"],
+        "prohibits": {
+            "test_platform": {
+                "u1": [
+                    {
+                        "id": "abpsfpt-fixed",
+                        "word": "w",
+                        "time": 1700000000.0,
+                        "show": True,
+                        "raw": "原样",
+                    }
+                ]
+            }
+        },
+        "banners": {"test_platform": {}},
+        "white_list": {"test_platform": []},
+        "pending_notifications": [],
+        "data_migrate_tag": ["v2.3.0", "v2.6.0", "v2.7.0"],
+    }
+    plugin = await make_plugin(data=data)
+
+    record = plugin.ban_list["prohibits"]["test_platform"]["u1"][0]
+    assert record == {
+        "id": "abpsfpt-fixed",
+        "word": "w",
+        "time": 1700000000.0,
+        "show": True,
+        "raw": "原样",
+    }
+
+
+async def test_migrated_record_is_traceable_through_debug_command(make_plugin, config):
+    """端到端：老数据升级后，其补齐的 id 能被 /sf debug 查到（raw 为空是预期结果）。"""
+    data = {
+        "available_platforms": ["test_platform"],
+        "prohibits": {
+            "test_platform": {
+                "u1": [{"word": "老记录", "time": 1700000000.0, "show": True}]
+            }
+        },
+        "banners": {"test_platform": {}},
+        "white_list": {"test_platform": []},
+        "pending_notifications": [],
+        "data_migrate_tag": ["v2.3.0", "v2.6.0"],
+    }
+    plugin = await make_plugin(config, data=data)
+    command_manager.initialize(plugin)
+
+    migrated_id = plugin.ban_list["prohibits"]["test_platform"]["u1"][0]["id"]
+    event = AstrMessageEvent(
+        sender_id="admin", message=f"/sf debug {migrated_id}", platform="test_platform"
+    )
+    await command_manager.debug(event, migrated_id)
+
+    # 老记录本来就没有原始返回体，迁移只是补空字符串
+    assert "已经被清理" in str(event.sent[-1])
+
+
+# ------------------------------------------------------- raw 保留期限
+
+
+async def test_unban_all_clears_raw_after_expire_day(make_plugin, config):
+    """超过 debug_expire_day 的原始返回体被清空，未到期的原样保留。"""
+    config["filter_config"]["debug_expire_day"] = 3
+    plugin = await make_plugin(config)
+    now = pendulum.now().timestamp()
+    plugin.ban_list["prohibits"]["test_platform"]["u1"] = [
+        {"word": "五天前", "time": now - 5 * 86400, "show": True, "raw": "过期原文"},
+        {"word": "今天", "time": now - 60, "show": True, "raw": "新鲜原文"},
+    ]
+    flag = await plugin.unban_all()
+
+    assert flag is True
+    records = plugin.ban_list["prohibits"]["test_platform"]["u1"]
+    assert records[0]["raw"] == ""
+    assert records[1]["raw"] == "新鲜原文"
+
+
+async def test_unban_all_keeps_raw_when_expire_day_zero(make_plugin, config):
+    """debug_expire_day 最小可设为 0，此时任何已存在的原始返回体都应立即清理。"""
+    config["filter_config"]["debug_expire_day"] = 0
+    plugin = await make_plugin(config)
+    now = pendulum.now().timestamp()
+    plugin.ban_list["prohibits"]["test_platform"]["u1"] = [
+        {"word": "刚刚", "time": now, "show": True, "raw": "不该保留的原文"}
+    ]
+    flag = await plugin.unban_all()
+
+    assert flag is True
+    assert plugin.ban_list["prohibits"]["test_platform"]["u1"][0]["raw"] == ""
+
+
+async def test_unban_all_reports_no_change_for_recent_record(make_plugin, config):
+    """未到期且无需隐藏的违规记录不应触发落盘。"""
+    config["filter_config"]["debug_expire_day"] = 3
+    plugin = await make_plugin(config)
+    now = pendulum.now().timestamp()
+    plugin.ban_list["prohibits"]["test_platform"]["u1"] = [
+        {"word": "今天", "time": now - 60, "show": True, "raw": "新鲜原文"}
+    ]
+    assert await plugin.unban_all() is False
+
+
+async def test_unban_all_clears_hidden_record_raw_too(make_plugin, config):
+    """被 check 命令隐藏与 raw 过期是两套独立规则，同一条记录可能同时命中。"""
+    config["command_config"]["check_disshow_time"] = 3
+    config["filter_config"]["debug_expire_day"] = 1
+    plugin = await make_plugin(config)
+    now = pendulum.now().timestamp()
+    plugin.ban_list["prohibits"]["test_platform"]["u1"] = [
+        {"word": "两天前", "time": now - 2 * 86400, "show": True, "raw": "过期原文"}
+    ]
+    # 模拟 /sf check 已折叠该记录：show 由 check 命令维护，与 raw 是否保留无关
+    plugin.ban_list["prohibits"]["test_platform"]["u1"][0]["show"] = False
+    assert await plugin.unban_all() is True
+
+    record = plugin.ban_list["prohibits"]["test_platform"]["u1"][0]
+    assert record["show"] is False  # 仍在 check_disshow_time 展示期内，不会被重新显示
+    assert record["raw"] == ""  # 但已超过原始返回体的保留期限
+    assert record["word"] == "两天前"  # 违规内容本身不会被清理
 
 
 # ---------------------------------------------------------------- terminate

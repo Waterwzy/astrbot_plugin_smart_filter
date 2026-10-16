@@ -68,8 +68,8 @@ async def test_bancount(make_plugin, config):
     plugin = await _plugin_with_manager(make_plugin, config)
     now = pendulum.now().timestamp()
     plugin.ban_list["prohibits"]["test_platform"]["repeat_user"] = [
-        {"word": "a", "time": now, "show": True},
-        {"word": "b", "time": now, "show": True},
+        {"word": "a", "time": now, "show": True, "raw": ""},
+        {"word": "b", "time": now, "show": True, "raw": ""},
     ]
     event = AstrMessageEvent(sender_id="admin", message="x", platform="test_platform")
     await command_manager.bancount(event, 2, "PT1H")
@@ -88,7 +88,7 @@ async def test_check_lists_violations(make_plugin, config):
     plugin = await _plugin_with_manager(make_plugin, config)
     now = pendulum.now().timestamp()
     plugin.ban_list["prohibits"]["test_platform"]["u1"] = [
-        {"word": "违规词", "time": now, "show": True}
+        {"word": "违规词", "time": now, "show": True, "raw": ""}
     ]
     event = AstrMessageEvent(sender_id="admin", message="x", platform="test_platform")
     await command_manager.check(event)
@@ -102,8 +102,8 @@ async def test_check_hides_old_violations(make_plugin, config):
     plugin = await _plugin_with_manager(make_plugin, config)
     now = pendulum.now().timestamp()
     plugin.ban_list["prohibits"]["test_platform"]["u1"] = [
-        {"word": "很旧", "time": now - 5 * 86400, "show": False},
-        {"word": "新词", "time": now - 60, "show": True},
+        {"word": "很旧", "time": now - 5 * 86400, "show": False, "raw": ""},
+        {"word": "新词", "time": now - 60, "show": True, "raw": ""},
     ]
     event = AstrMessageEvent(sender_id="admin", message="x", platform="test_platform")
     await command_manager.check(event)
@@ -117,7 +117,7 @@ async def test_check_hides_banned_users_when_configured(make_plugin, config):
     plugin = await _plugin_with_manager(make_plugin, config)
     now = pendulum.now().timestamp()
     plugin.ban_list["prohibits"]["test_platform"]["banned_user"] = [
-        {"word": "x", "time": now, "show": True}
+        {"word": "x", "time": now, "show": True, "raw": ""}
     ]
     plugin.ban_list["banners"]["test_platform"]["banned_user"] = now + 3600
     event = AstrMessageEvent(sender_id="admin", message="x", platform="test_platform")
@@ -239,3 +239,77 @@ async def test_checkw_repeated_warning(make_plugin, config):
     event = AstrMessageEvent(sender_id="admin", message="x", platform="test_platform")
     await command_manager.checkw(event, "white_user")
     assert "重复" in str(event.sent[-1])
+
+
+# ------------------------------------------------------------------ debug 指令
+
+
+CLEAN_RAW_MSG = "该id对应的违规消息存在，但是相关原始返回体不存在或者已经被清理"
+
+
+def _record(pro_id, raw, word="违规词", time=1, show=True):
+    """一条违规记录。
+
+    raw 字段始终存在（v2.7.0 迁移层会为老记录补上空字符串），超过保留期限时
+    只是把它的值清空，因此 /sf debug 需要区分「id 不存在」与「原文已被清理」。
+    """
+    return {"id": pro_id, "word": word, "time": time, "show": show, "raw": raw}
+
+
+async def test_debug_returns_raw_content(make_plugin, config):
+    plugin = await _plugin_with_manager(make_plugin, config)
+    plugin.ban_list["prohibits"]["test_platform"]["u1"] = [
+        _record("abpsfpt-abc123", "思维链原始返回体")
+    ]
+    event = AstrMessageEvent(sender_id="admin", message="x", platform="test_platform")
+    await command_manager.debug(event, "abpsfpt-abc123")
+
+    assert str(event.sent[-1]) == "[DEBUG]思维链原始返回体"
+
+
+async def test_debug_finds_record_on_any_platform(make_plugin, config):
+    """id 是全局唯一的，查询时不应局限于指令所在的消息平台。"""
+    plugin = await _plugin_with_manager(make_plugin, config)
+    plugin.ban_list["prohibits"]["other_platform"]["u9"] = [
+        _record("abpsfpt-other", "另一个平台的原文")
+    ]
+    event = AstrMessageEvent(sender_id="admin", message="x", platform="test_platform")
+    await command_manager.debug(event, "abpsfpt-other")
+
+    assert str(event.sent[-1]) == "[DEBUG]另一个平台的原文"
+
+
+async def test_debug_unknown_id(make_plugin, config):
+    plugin = await _plugin_with_manager(make_plugin, config)
+    plugin.ban_list["prohibits"]["test_platform"]["u1"] = [
+        _record("abpsfpt-known", "原文")
+    ]
+    event = AstrMessageEvent(sender_id="admin", message="x", platform="test_platform")
+    await command_manager.debug(event, "abpsfpt-missing")
+
+    assert "不存在" in str(event.sent[-1])
+    assert "abpsfpt-missing" in str(event.sent[-1])
+
+
+async def test_debug_reports_empty_raw_as_cleaned(make_plugin, config):
+    """id 有效但原始返回体已被保留期限清理时，给出可操作的提示而不是报错。"""
+    plugin = await _plugin_with_manager(make_plugin, config)
+    plugin.ban_list["prohibits"]["test_platform"]["u1"] = [_record("abpsfpt-empty", "")]
+    event = AstrMessageEvent(sender_id="admin", message="x", platform="test_platform")
+    await command_manager.debug(event, "abpsfpt-empty")
+
+    assert CLEAN_RAW_MSG in str(event.sent[-1])
+
+
+async def test_debug_expired_raw_matches_cleaned_message(make_plugin, config):
+    """端到端：raw 过期清空后，用户看到的就是提示语中说明的清理结果。"""
+    config["filter_config"]["debug_expire_day"] = 0
+    plugin = await _plugin_with_manager(make_plugin, config)
+    plugin.ban_list["prohibits"]["test_platform"]["u1"] = [
+        _record("abpsfpt-old", "过期原文", time=pendulum.now().timestamp())
+    ]
+    await plugin.unban_all()
+
+    event = AstrMessageEvent(sender_id="admin", message="x", platform="test_platform")
+    await command_manager.debug(event, "abpsfpt-old")
+    assert CLEAN_RAW_MSG in str(event.sent[-1])

@@ -16,10 +16,10 @@ async def test_get_violations_sorted_by_last_time(make_plugin, config):
     plugin = await _plugin_with_api(make_plugin, config)
     now = pendulum.now().timestamp()
     plugin.ban_list["prohibits"]["test_platform"]["u1"] = [
-        {"word": "最近", "time": now, "show": True}
+        {"word": "最近", "time": now, "show": True, "raw": ""}
     ]
     plugin.ban_list["prohibits"]["other_platform"]["u2"] = [
-        {"word": "较早", "time": now - 5000, "show": True}
+        {"word": "较早", "time": now - 5000, "show": True, "raw": ""}
     ]
     resp = await api_manager.get_violations()
     assert resp["status"] == "ok"

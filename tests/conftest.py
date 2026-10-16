@@ -59,7 +59,8 @@ def make_config():
             "filter_group": True,
             "filter_mode": True,
             "filter_failclose": False,
-            "debug_mode": False,
+            # v2.7.0 移除了 debug_mode，改为原始返回体的保留天数
+            "debug_expire_day": 3,
             "skip_empty_mode": False,
             "skip_schema": [
                 {
